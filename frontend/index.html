@@ -309,6 +309,71 @@
         .hidden {
             display: none !important;
         }
+
+        /* ---- Lock Banner ---- */
+        .lock-banner {
+            padding: 8px 20px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            text-align: center;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
+        .lock-banner.drawing {
+            background: #2d6a4f;
+            color: #95d5b2;
+            border: 1px solid #40916c;
+        }
+
+        .lock-banner.locked {
+            background: #5c2018;
+            color: #f4a0a0;
+            border: 1px solid #8b2500;
+        }
+
+        .lock-banner.ready {
+            background: #1a3a5c;
+            color: #88c8f7;
+            border: 1px solid #2980b9;
+        }
+
+        .ws-status {
+            font-size: 0.75rem;
+            color: #aaa;
+            text-align: center;
+            margin-top: 5px;
+        }
+
+        .ws-status.connected {
+            color: #2ecc71;
+        }
+
+        .ws-status.disconnected {
+            color: #e74c3c;
+        }
+
+        .users-list {
+            margin-top: 10px;
+            padding: 10px;
+            background: #1a1a2e;
+            border-radius: 5px;
+        }
+
+        .users-list h4 {
+            color: #e94560;
+            font-size: 0.85rem;
+            margin-bottom: 5px;
+        }
+
+        .users-list .user-tag {
+            display: inline-block;
+            padding: 3px 8px;
+            background: #0f3460;
+            border-radius: 3px;
+            font-size: 0.75rem;
+            margin: 2px;
+        }
     </style>
 </head>
 <body>
@@ -366,6 +431,14 @@
                 <p>Login and create or join a room to start drawing!</p>
             </div>
 
+            <div class="users-list hidden" id="usersList">
+                <h4>Online in this room:</h4>
+                <div id="usersTags"></div>
+            </div>
+
+            <div id="lockBanner" class="lock-banner ready hidden">Click canvas to start drawing</div>
+            <div id="wsStatus" class="ws-status hidden">Connecting...</div>
+
             <div class="toolbar hidden" id="toolbar">
                 <label>Color:</label>
                 <input type="color" id="penColor" value="#000000">
@@ -377,6 +450,7 @@
                 <button class="btn btn-secondary active" id="penBtn" onclick="setTool('pen')">Pen</button>
                 <button class="btn btn-secondary" id="eraserBtn" onclick="setTool('eraser')">Eraser</button>
                 <button class="btn btn-danger" onclick="clearCanvas()">Clear</button>
+                <button class="btn btn-secondary" id="releaseBtn" onclick="releaseLock()" style="display:none;">Release</button>
             </div>
 
             <canvas id="drawCanvas" class="hidden" width="900" height="550"></canvas>
@@ -386,9 +460,15 @@
     <script>
         // ---- State ----
         const API = 'http://127.0.0.1:8000';
+        const WS_BASE = 'ws://127.0.0.1:8000';
         let token = localStorage.getItem('token');
         let currentUser = null;
         let currentRoom = null;
+        let ws = null;
+        let hasLock = false;
+        let usersInRoom = [];
+        let pendingDrawPos = null; // {x, y} from click that requested the lock
+        let lockTimer = null; // auto-release timer
 
         // ---- Canvas State ----
         const canvas = document.getElementById('drawCanvas');
@@ -426,7 +506,6 @@
                 });
                 const data = await resp.json();
                 if (!resp.ok) throw new Error(data.detail);
-                // Auto-login after signup
                 document.getElementById('loginUsername').value = username;
                 document.getElementById('loginPassword').value = password;
                 showModal('login');
@@ -443,7 +522,6 @@
             const errEl = document.getElementById('loginError');
 
             try {
-                // Use form data (same as Swagger authorize button)
                 const formBody = new URLSearchParams();
                 formBody.append('username', username);
                 formBody.append('password', password);
@@ -468,6 +546,7 @@
         }
 
         function logout() {
+            disconnectWebSocket();
             token = null;
             localStorage.removeItem('token');
             document.getElementById('userInfo').innerHTML = `
@@ -532,14 +611,178 @@
             }
         }
 
-        function selectRoom(roomId, roomName) {
+        // ---- Room Selection + WebSocket ----
+        async function selectRoom(roomId, roomName) {
+            // Disconnect from old room
+            disconnectWebSocket();
+            hasLock = false;
+            isDrawing = false;
+            usersInRoom = [];
+            clearTimeout(lockTimer);
+
+            // Auto-join room if not already a member
+            try {
+                await fetch(`${API}/rooms/${roomId}/join`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                // 200 = joined, 400 = already member (both fine)
+            } catch (e) { /* ignore - might already be member */ }
+
             currentRoom = { id: roomId, name: roomName };
             document.getElementById('noRoom').classList.add('hidden');
             document.getElementById('toolbar').classList.remove('hidden');
             document.getElementById('drawCanvas').classList.remove('hidden');
+            document.getElementById('lockBanner').classList.remove('hidden');
+            document.getElementById('wsStatus').classList.remove('hidden');
+            document.getElementById('usersList').classList.remove('hidden');
             document.getElementById('roomList').querySelectorAll('.room-item').forEach(el => el.classList.remove('active'));
-            loadRooms(); // refresh to highlight active
+            loadRooms();
             clearCanvas();
+
+            // Connect WebSocket
+            connectWebSocket(roomId);
+        }
+
+        // ---- WebSocket ----
+        function connectWebSocket(roomId) {
+            const statusEl = document.getElementById('wsStatus');
+            statusEl.textContent = 'Connecting...';
+            statusEl.className = 'ws-status';
+
+            ws = new WebSocket(`${WS_BASE}/ws/${roomId}?token=${token}`);
+
+            ws.onopen = () => {
+                statusEl.textContent = 'Connected';
+                statusEl.className = 'ws-status connected';
+                updateLockBanner('ready');
+            };
+
+            ws.onclose = (e) => {
+                hasLock = false;
+                // Don't reconnect on auth failure (4001 = bad token, 4003 = not member)
+                if (e.code === 4001 || e.code === 4003) {
+                    statusEl.textContent = e.reason || 'Connection rejected';
+                    statusEl.className = 'ws-status disconnected';
+                    updateLockBanner('ready', e.reason || 'Cannot connect to room');
+                    return;
+                }
+                statusEl.textContent = 'Disconnected';
+                statusEl.className = 'ws-status disconnected';
+                updateLockBanner('ready');
+                // Reconnect after 2 seconds
+                if (currentRoom) {
+                    setTimeout(() => connectWebSocket(roomId), 2000);
+                }
+            };
+
+            ws.onerror = () => {
+                statusEl.textContent = 'Connection error';
+                statusEl.className = 'ws-status disconnected';
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleWSMessage(data);
+            };
+        }
+
+        function disconnectWebSocket() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+            document.getElementById('lockBanner').classList.add('hidden');
+            document.getElementById('wsStatus').classList.add('hidden');
+            document.getElementById('usersList').classList.add('hidden');
+        }
+
+        function sendWS(data) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(data));
+            }
+        }
+
+        // ---- Handle WebSocket Messages ----
+        function handleWSMessage(data) {
+            switch (data.type) {
+                case 'draw':
+                    drawRemote(data);
+                    break;
+
+                case 'lock_granted':
+                    // Only I get this - I have the lock
+                    hasLock = true;
+                    updateLockBanner('drawing');
+                    // If user clicked while waiting for lock, start drawing from that point
+                    if (pendingDrawPos) {
+                        isDrawing = true;
+                        [lastX, lastY] = [pendingDrawPos.x, pendingDrawPos.y];
+                        pendingDrawPos = null;
+                    }
+                    break;
+
+                case 'locked_by':
+                    // Someone else got the lock
+                    hasLock = false;
+                    isDrawing = false;
+                    updateLockBanner('locked', data.username + ' is drawing...');
+                    break;
+
+                case 'lock_denied':
+                    hasLock = false;
+                    isDrawing = false;
+                    updateLockBanner('locked', data.message);
+                    break;
+
+                case 'lock_released':
+                    hasLock = false;
+                    isDrawing = false;
+                    updateLockBanner('ready');
+                    break;
+
+                case 'user_joined':
+                    usersInRoom = data.users;
+                    updateUsersList();
+                    break;
+
+                case 'user_left':
+                    usersInRoom = data.users;
+                    updateUsersList();
+                    break;
+
+                case 'error':
+                    console.error('Server error:', data.message);
+                    break;
+            }
+        }
+
+        // ---- Lock Banner ----
+        function updateLockBanner(state, message) {
+            const banner = document.getElementById('lockBanner');
+            const releaseBtn = document.getElementById('releaseBtn');
+            banner.classList.remove('hidden', 'drawing', 'locked', 'ready');
+            if (state === 'drawing') {
+                banner.className = 'lock-banner drawing';
+                banner.textContent = 'You are drawing. Others can see.';
+                releaseBtn.style.display = 'inline-block';
+            } else if (state === 'locked') {
+                banner.className = 'lock-banner locked';
+                banner.textContent = message || 'Someone else is drawing...';
+                releaseBtn.style.display = 'none';
+            } else {
+                banner.className = 'lock-banner ready';
+                banner.textContent = 'Click canvas to start drawing';
+                releaseBtn.style.display = 'none';
+            }
+        }
+
+        // ---- Users List ----
+        function updateUsersList() {
+            const tagsEl = document.getElementById('usersTags');
+            tagsEl.innerHTML = usersInRoom.map(u =>
+                `<span class="user-tag">${u.username}</span>`
+            ).join('');
         }
 
         // ---- Canvas Drawing ----
@@ -569,36 +812,96 @@
             ctx.fillRect(0, 0, canvas.width, canvas.height);
         }
 
-        // Drawing events
-        canvas.addEventListener('mousedown', (e) => {
-            isDrawing = true;
-            [lastX, lastY] = [e.offsetX, e.offsetY];
-        });
-
-        canvas.addEventListener('mousemove', (e) => {
-            if (!isDrawing) return;
-
+        // ---- Draw locally ----
+        function drawLocal(x1, y1, x2, y2, color, size, tool) {
             ctx.beginPath();
-            ctx.moveTo(lastX, lastY);
-            ctx.lineTo(e.offsetX, e.offsetY);
-
-            if (currentTool === 'eraser') {
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            if (tool === 'eraser') {
                 ctx.strokeStyle = '#ffffff';
-                ctx.lineWidth = penSize * 5;
+                ctx.lineWidth = size * 5;
             } else {
-                ctx.strokeStyle = penColor;
-                ctx.lineWidth = penSize;
+                ctx.strokeStyle = color;
+                ctx.lineWidth = size;
             }
-
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
             ctx.stroke();
+        }
 
+        // ---- Draw from remote user ----
+        function drawRemote(data) {
+            drawLocal(data.x1, data.y1, data.x2, data.y2, data.color, data.size, data.tool);
+        }
+
+        // ---- Lock Timer (auto-release after 5 seconds of no drawing) ----
+        function resetLockTimer() {
+            clearTimeout(lockTimer);
+            lockTimer = setTimeout(() => {
+                if (hasLock) {
+                    sendWS({ type: 'lock_release' });
+                    hasLock = false;
+                    isDrawing = false;
+                    updateLockBanner('ready', 'Lock released (inactivity)');
+                }
+            }, 5000); // 5 seconds
+        }
+
+        function releaseLock() {
+            clearTimeout(lockTimer);
+            if (hasLock) {
+                sendWS({ type: 'lock_release' });
+                hasLock = false;
+                isDrawing = false;
+                updateLockBanner('ready');
+            }
+        }
+
+        // ---- Canvas Events ----
+        canvas.addEventListener('mousedown', (e) => {
+            if (!currentRoom) return;
+            if (!hasLock) {
+                // Request the lock and remember where user clicked
+                pendingDrawPos = { x: e.offsetX, y: e.offsetY };
+                sendWS({ type: 'lock_request' });
+                return;
+            }
+            isDrawing = true;
             [lastX, lastY] = [e.offsetX, e.offsetY];
+            resetLockTimer();
         });
 
-        canvas.addEventListener('mouseup', () => { isDrawing = false; });
-        canvas.addEventListener('mouseout', () => { isDrawing = false; });
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isDrawing || !hasLock) return;
+
+            const x1 = lastX, y1 = lastY;
+            const x2 = e.offsetX, y2 = e.offsetY;
+
+            // Draw locally
+            drawLocal(x1, y1, x2, y2, penColor, penSize, currentTool);
+
+            // Send to server
+            sendWS({
+                type: 'draw',
+                x1, y1, x2, y2,
+                color: penColor,
+                size: penSize,
+                tool: currentTool
+            });
+
+            [lastX, lastY] = [x2, y2];
+            resetLockTimer();
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            isDrawing = false;
+            resetLockTimer();
+        });
+
+        canvas.addEventListener('mouseout', () => {
+            isDrawing = false;
+            resetLockTimer();
+        });
 
         // ---- Handle Enter key in modals ----
         document.getElementById('loginPassword').addEventListener('keydown', (e) => {
