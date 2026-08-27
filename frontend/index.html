@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Burhan's Drawing App</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a2e;
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ---- Navbar ---- */
+        nav {
+            background: #16213e;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+
+        nav h1 {
+            font-size: 1.5rem;
+            color: #e94560;
+        }
+
+        nav h1 span {
+            color: #fff;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .user-info span {
+            color: #aaa;
+        }
+
+        .btn {
+            padding: 8px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: 0.2s;
+        }
+
+        .btn-primary {
+            background: #e94560;
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: #c73652;
+        }
+
+        .btn-secondary {
+            background: #0f3460;
+            color: #fff;
+        }
+
+        .btn-secondary:hover {
+            background: #1a4a7a;
+        }
+
+        .btn-danger {
+            background: #ff4444;
+            color: #fff;
+        }
+
+        /* ---- Auth Modal ---- */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 100;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: #16213e;
+            padding: 30px;
+            border-radius: 10px;
+            width: 380px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        .modal h2 {
+            margin-bottom: 20px;
+            color: #e94560;
+        }
+
+        .modal input {
+            width: 100%;
+            padding: 10px 15px;
+            margin-bottom: 15px;
+            border: 1px solid #333;
+            border-radius: 5px;
+            background: #1a1a2e;
+            color: #fff;
+            font-size: 0.95rem;
+        }
+
+        .modal input:focus {
+            outline: none;
+            border-color: #e94560;
+        }
+
+        .modal .btn {
+            width: 100%;
+            padding: 12px;
+            font-size: 1rem;
+        }
+
+        .modal .toggle {
+            text-align: center;
+            margin-top: 15px;
+            color: #aaa;
+        }
+
+        .modal .toggle a {
+            color: #e94560;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        .error-msg {
+            color: #ff4444;
+            font-size: 0.85rem;
+            margin-bottom: 10px;
+            display: none;
+        }
+
+        /* ---- Main Content ---- */
+        .main-content {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* ---- Sidebar ---- */
+        .sidebar {
+            width: 250px;
+            background: #16213e;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            border-right: 1px solid #333;
+        }
+
+        .sidebar h3 {
+            color: #e94560;
+            font-size: 1rem;
+        }
+
+        .sidebar input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #333;
+            border-radius: 5px;
+            background: #1a1a2e;
+            color: #fff;
+            font-size: 0.85rem;
+        }
+
+        .sidebar input:focus {
+            outline: none;
+            border-color: #e94560;
+        }
+
+        .room-list {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .room-item {
+            padding: 10px 12px;
+            background: #1a1a2e;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: 0.2s;
+            border: 1px solid transparent;
+        }
+
+        .room-item:hover {
+            border-color: #e94560;
+        }
+
+        .room-item.active {
+            border-color: #e94560;
+            background: #0f3460;
+        }
+
+        .room-item .room-name {
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+
+        .room-item .room-creator {
+            font-size: 0.75rem;
+            color: #aaa;
+            margin-top: 3px;
+        }
+
+        /* ---- Canvas Area ---- */
+        .canvas-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            gap: 15px;
+        }
+
+        .canvas-area.hidden {
+            display: none;
+        }
+
+        /* ---- Toolbar ---- */
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            background: #16213e;
+            padding: 10px 20px;
+            border-radius: 10px;
+        }
+
+        .toolbar label {
+            font-size: 0.85rem;
+            color: #aaa;
+        }
+
+        .toolbar input[type="color"] {
+            width: 35px;
+            height: 35px;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            background: none;
+        }
+
+        .toolbar input[type="range"] {
+            width: 100px;
+            accent-color: #e94560;
+        }
+
+        .toolbar .size-display {
+            font-size: 0.8rem;
+            color: #fff;
+            min-width: 30px;
+        }
+
+        .toolbar .btn {
+            padding: 6px 15px;
+        }
+
+        .toolbar .btn.active {
+            background: #e94560;
+        }
+
+        /* ---- Canvas ---- */
+        canvas {
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+            cursor: crosshair;
+        }
+
+        /* ---- No Room Selected ---- */
+        .no-room {
+            text-align: center;
+            color: #555;
+        }
+
+        .no-room h2 {
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+        }
+
+        /* ---- Hidden class ---- */
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Navbar -->
+    <nav>
+        <h1>Burhan's <span>Drawing App</span></h1>
+        <div class="user-info" id="userInfo">
+            <span>Not logged in</span>
+            <button class="btn btn-primary" onclick="showModal('login')">Login</button>
+        </div>
+    </nav>
+
+    <!-- Login Modal -->
+    <div class="modal-overlay" id="loginModal">
+        <div class="modal">
+            <h2>Login</h2>
+            <p class="error-msg" id="loginError"></p>
+            <input type="text" id="loginUsername" placeholder="Username or email">
+            <input type="password" id="loginPassword" placeholder="Password">
+            <button class="btn btn-primary" onclick="login()">Login</button>
+            <p class="toggle">Don't have an account? <a onclick="showModal('signup')">Sign up</a></p>
+        </div>
+    </div>
+
+    <!-- Signup Modal -->
+    <div class="modal-overlay" id="signupModal">
+        <div class="modal">
+            <h2>Sign Up</h2>
+            <p class="error-msg" id="signupError"></p>
+            <input type="text" id="signupUsername" placeholder="Username">
+            <input type="email" id="signupEmail" placeholder="Email">
+            <input type="password" id="signupPassword" placeholder="Password">
+            <button class="btn btn-primary" onclick="signup()">Create Account</button>
+            <p class="toggle">Already have an account? <a onclick="showModal('login')">Login</a></p>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <h3>Rooms</h3>
+            <input type="text" id="roomNameInput" placeholder="New room name..." class="hidden">
+            <button class="btn btn-primary hidden" id="createRoomBtn" onclick="createRoom()">+ Create Room</button>
+            <div class="room-list" id="roomList">
+                <p style="color:#555; font-size:0.85rem;">Login to see rooms</p>
+            </div>
+        </div>
+
+        <!-- Canvas Area -->
+        <div class="canvas-area" id="canvasArea">
+            <div class="no-room" id="noRoom">
+                <h2>Welcome to Burhan's Drawing App</h2>
+                <p>Login and create or join a room to start drawing!</p>
+            </div>
+
+            <div class="toolbar hidden" id="toolbar">
+                <label>Color:</label>
+                <input type="color" id="penColor" value="#000000">
+
+                <label>Size:</label>
+                <input type="range" id="penSize" min="1" max="20" value="3">
+                <span class="size-display" id="sizeDisplay">3</span>
+
+                <button class="btn btn-secondary active" id="penBtn" onclick="setTool('pen')">Pen</button>
+                <button class="btn btn-secondary" id="eraserBtn" onclick="setTool('eraser')">Eraser</button>
+                <button class="btn btn-danger" onclick="clearCanvas()">Clear</button>
+            </div>
+
+            <canvas id="drawCanvas" class="hidden" width="900" height="550"></canvas>
+        </div>
+    </div>
+
+    <script>
+        // ---- State ----
+        const API = 'http://127.0.0.1:8000';
+        let token = localStorage.getItem('token');
+        let currentUser = null;
+        let currentRoom = null;
+
+        // ---- Canvas State ----
+        const canvas = document.getElementById('drawCanvas');
+        const ctx = canvas.getContext('2d');
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+        let currentTool = 'pen';
+        let penColor = '#000000';
+        let penSize = 3;
+
+        // ---- Init ----
+        if (token) {
+            loadRooms();
+            showLoggedInUI();
+        }
+
+        // ---- Auth ----
+        function showModal(type) {
+            document.getElementById('loginModal').classList.toggle('active', type === 'login');
+            document.getElementById('signupModal').classList.toggle('active', type === 'signup');
+        }
+
+        async function signup() {
+            const username = document.getElementById('signupUsername').value;
+            const email = document.getElementById('signupEmail').value;
+            const password = document.getElementById('signupPassword').value;
+            const errEl = document.getElementById('signupError');
+
+            try {
+                const resp = await fetch(`${API}/auth/signup`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, email, password })
+                });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.detail);
+                // Auto-login after signup
+                document.getElementById('loginUsername').value = username;
+                document.getElementById('loginPassword').value = password;
+                showModal('login');
+                login();
+            } catch (e) {
+                errEl.textContent = e.message;
+                errEl.style.display = 'block';
+            }
+        }
+
+        async function login() {
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+            const errEl = document.getElementById('loginError');
+
+            try {
+                // Use form data (same as Swagger authorize button)
+                const formBody = new URLSearchParams();
+                formBody.append('username', username);
+                formBody.append('password', password);
+
+                const resp = await fetch(`${API}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: formBody.toString()
+                });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.detail);
+
+                token = data.access_token;
+                localStorage.setItem('token', token);
+                showModal(null);
+                showLoggedInUI();
+                loadRooms();
+            } catch (e) {
+                errEl.textContent = e.message;
+                errEl.style.display = 'block';
+            }
+        }
+
+        function logout() {
+            token = null;
+            localStorage.removeItem('token');
+            document.getElementById('userInfo').innerHTML = `
+                <span>Not logged in</span>
+                <button class="btn btn-primary" onclick="showModal('login')">Login</button>
+            `;
+            document.getElementById('roomNameInput').classList.add('hidden');
+            document.getElementById('createRoomBtn').classList.add('hidden');
+            document.getElementById('roomList').innerHTML = '<p style="color:#555; font-size:0.85rem;">Login to see rooms</p>';
+        }
+
+        function showLoggedInUI() {
+            document.getElementById('userInfo').innerHTML = `
+                <span>Logged in</span>
+                <button class="btn btn-secondary" onclick="logout()">Logout</button>
+            `;
+            document.getElementById('roomNameInput').classList.remove('hidden');
+            document.getElementById('createRoomBtn').classList.remove('hidden');
+        }
+
+        // ---- Rooms ----
+        async function loadRooms() {
+            try {
+                const resp = await fetch(`${API}/rooms/`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const rooms = await resp.json();
+                const roomList = document.getElementById('roomList');
+                if (rooms.length === 0) {
+                    roomList.innerHTML = '<p style="color:#555; font-size:0.85rem;">No rooms yet. Create one!</p>';
+                    return;
+                }
+                roomList.innerHTML = rooms.map(room => `
+                    <div class="room-item ${currentRoom?.id === room.id ? 'active' : ''}" onclick="selectRoom(${room.id}, '${room.name}')">
+                        <div class="room-name">${room.name}</div>
+                        <div class="room-creator">by User #${room.creator_id}</div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.error('Failed to load rooms:', e);
+            }
+        }
+
+        async function createRoom() {
+            const name = document.getElementById('roomNameInput').value.trim();
+            if (!name) return alert('Enter a room name');
+
+            try {
+                const resp = await fetch(`${API}/rooms/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ name })
+                });
+                if (!resp.ok) throw new Error('Failed to create room');
+                document.getElementById('roomNameInput').value = '';
+                loadRooms();
+            } catch (e) {
+                alert(e.message);
+            }
+        }
+
+        function selectRoom(roomId, roomName) {
+            currentRoom = { id: roomId, name: roomName };
+            document.getElementById('noRoom').classList.add('hidden');
+            document.getElementById('toolbar').classList.remove('hidden');
+            document.getElementById('drawCanvas').classList.remove('hidden');
+            document.getElementById('roomList').querySelectorAll('.room-item').forEach(el => el.classList.remove('active'));
+            loadRooms(); // refresh to highlight active
+            clearCanvas();
+        }
+
+        // ---- Canvas Drawing ----
+        const sizeDisplay = document.getElementById('sizeDisplay');
+        const penColorInput = document.getElementById('penColor');
+        const penSizeInput = document.getElementById('penSize');
+
+        penColorInput.addEventListener('input', (e) => { penColor = e.target.value; });
+        penSizeInput.addEventListener('input', (e) => {
+            penSize = parseInt(e.target.value);
+            sizeDisplay.textContent = penSize;
+        });
+
+        function setTool(tool) {
+            currentTool = tool;
+            document.getElementById('penBtn').classList.toggle('active', tool === 'pen');
+            document.getElementById('eraserBtn').classList.toggle('active', tool === 'eraser');
+            if (tool === 'eraser') {
+                canvas.style.cursor = 'cell';
+            } else {
+                canvas.style.cursor = 'crosshair';
+            }
+        }
+
+        function clearCanvas() {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // Drawing events
+        canvas.addEventListener('mousedown', (e) => {
+            isDrawing = true;
+            [lastX, lastY] = [e.offsetX, e.offsetY];
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isDrawing) return;
+
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(e.offsetX, e.offsetY);
+
+            if (currentTool === 'eraser') {
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = penSize * 5;
+            } else {
+                ctx.strokeStyle = penColor;
+                ctx.lineWidth = penSize;
+            }
+
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.stroke();
+
+            [lastX, lastY] = [e.offsetX, e.offsetY];
+        });
+
+        canvas.addEventListener('mouseup', () => { isDrawing = false; });
+        canvas.addEventListener('mouseout', () => { isDrawing = false; });
+
+        // ---- Handle Enter key in modals ----
+        document.getElementById('loginPassword').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') login();
+        });
+        document.getElementById('signupPassword').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') signup();
+        });
+        document.getElementById('roomNameInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') createRoom();
+        });
+    </script>
+</body>
+</html>
