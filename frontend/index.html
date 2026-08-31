@@ -5,380 +5,62 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Burhan's Drawing App</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #1a1a2e;
-            color: #fff;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-
-        /* ---- Navbar ---- */
-        nav {
-            background: #16213e;
-            padding: 15px 30px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-        }
-
-        nav h1 {
-            font-size: 1.5rem;
-            color: #e94560;
-        }
-
-        nav h1 span {
-            color: #fff;
-        }
-
-        .user-info {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-
-        .user-info span {
-            color: #aaa;
-        }
-
-        .btn {
-            padding: 8px 20px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 0.9rem;
-            transition: 0.2s;
-        }
-
-        .btn-primary {
-            background: #e94560;
-            color: #fff;
-        }
-
-        .btn-primary:hover {
-            background: #c73652;
-        }
-
-        .btn-secondary {
-            background: #0f3460;
-            color: #fff;
-        }
-
-        .btn-secondary:hover {
-            background: #1a4a7a;
-        }
-
-        .btn-danger {
-            background: #ff4444;
-            color: #fff;
-        }
-
-        /* ---- Auth Modal ---- */
-        .modal-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.7);
-            z-index: 100;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .modal-overlay.active {
-            display: flex;
-        }
-
-        .modal {
-            background: #16213e;
-            padding: 30px;
-            border-radius: 10px;
-            width: 380px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-        }
-
-        .modal h2 {
-            margin-bottom: 20px;
-            color: #e94560;
-        }
-
-        .modal input {
-            width: 100%;
-            padding: 10px 15px;
-            margin-bottom: 15px;
-            border: 1px solid #333;
-            border-radius: 5px;
-            background: #1a1a2e;
-            color: #fff;
-            font-size: 0.95rem;
-        }
-
-        .modal input:focus {
-            outline: none;
-            border-color: #e94560;
-        }
-
-        .modal .btn {
-            width: 100%;
-            padding: 12px;
-            font-size: 1rem;
-        }
-
-        .modal .toggle {
-            text-align: center;
-            margin-top: 15px;
-            color: #aaa;
-        }
-
-        .modal .toggle a {
-            color: #e94560;
-            cursor: pointer;
-            text-decoration: none;
-        }
-
-        .error-msg {
-            color: #ff4444;
-            font-size: 0.85rem;
-            margin-bottom: 10px;
-            display: none;
-        }
-
-        /* ---- Main Content ---- */
-        .main-content {
-            display: flex;
-            flex: 1;
-            overflow: hidden;
-        }
-
-        /* ---- Sidebar ---- */
-        .sidebar {
-            width: 250px;
-            background: #16213e;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            border-right: 1px solid #333;
-        }
-
-        .sidebar h3 {
-            color: #e94560;
-            font-size: 1rem;
-        }
-
-        .sidebar input {
-            width: 100%;
-            padding: 8px 12px;
-            border: 1px solid #333;
-            border-radius: 5px;
-            background: #1a1a2e;
-            color: #fff;
-            font-size: 0.85rem;
-        }
-
-        .sidebar input:focus {
-            outline: none;
-            border-color: #e94560;
-        }
-
-        .room-list {
-            flex: 1;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .room-item {
-            padding: 10px 12px;
-            background: #1a1a2e;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: 0.2s;
-            border: 1px solid transparent;
-        }
-
-        .room-item:hover {
-            border-color: #e94560;
-        }
-
-        .room-item.active {
-            border-color: #e94560;
-            background: #0f3460;
-        }
-
-        .room-item .room-name {
-            font-weight: bold;
-            font-size: 0.9rem;
-        }
-
-        .room-item .room-creator {
-            font-size: 0.75rem;
-            color: #aaa;
-            margin-top: 3px;
-        }
-
-        /* ---- Canvas Area ---- */
-        .canvas-area {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-            gap: 15px;
-        }
-
-        .canvas-area.hidden {
-            display: none;
-        }
-
-        /* ---- Toolbar ---- */
-        .toolbar {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            background: #16213e;
-            padding: 10px 20px;
-            border-radius: 10px;
-        }
-
-        .toolbar label {
-            font-size: 0.85rem;
-            color: #aaa;
-        }
-
-        .toolbar input[type="color"] {
-            width: 35px;
-            height: 35px;
-            border: none;
-            border-radius: 50%;
-            cursor: pointer;
-            background: none;
-        }
-
-        .toolbar input[type="range"] {
-            width: 100px;
-            accent-color: #e94560;
-        }
-
-        .toolbar .size-display {
-            font-size: 0.8rem;
-            color: #fff;
-            min-width: 30px;
-        }
-
-        .toolbar .btn {
-            padding: 6px 15px;
-        }
-
-        .toolbar .btn.active {
-            background: #e94560;
-        }
-
-        /* ---- Canvas ---- */
-        canvas {
-            background: #fff;
-            border-radius: 10px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
-            cursor: crosshair;
-        }
-
-        /* ---- No Room Selected ---- */
-        .no-room {
-            text-align: center;
-            color: #555;
-        }
-
-        .no-room h2 {
-            font-size: 1.5rem;
-            margin-bottom: 10px;
-        }
-
-        /* ---- Hidden class ---- */
-        .hidden {
-            display: none !important;
-        }
-
-        /* ---- Lock Banner ---- */
-        .lock-banner {
-            padding: 8px 20px;
-            border-radius: 8px;
-            font-size: 0.9rem;
-            text-align: center;
-            margin-bottom: 10px;
-            font-weight: bold;
-        }
-
-        .lock-banner.drawing {
-            background: #2d6a4f;
-            color: #95d5b2;
-            border: 1px solid #40916c;
-        }
-
-        .lock-banner.locked {
-            background: #5c2018;
-            color: #f4a0a0;
-            border: 1px solid #8b2500;
-        }
-
-        .lock-banner.ready {
-            background: #1a3a5c;
-            color: #88c8f7;
-            border: 1px solid #2980b9;
-        }
-
-        .ws-status {
-            font-size: 0.75rem;
-            color: #aaa;
-            text-align: center;
-            margin-top: 5px;
-        }
-
-        .ws-status.connected {
-            color: #2ecc71;
-        }
-
-        .ws-status.disconnected {
-            color: #e74c3c;
-        }
-
-        .users-list {
-            margin-top: 10px;
-            padding: 10px;
-            background: #1a1a2e;
-            border-radius: 5px;
-        }
-
-        .users-list h4 {
-            color: #e94560;
-            font-size: 0.85rem;
-            margin-bottom: 5px;
-        }
-
-        .users-list .user-tag {
-            display: inline-block;
-            padding: 3px 8px;
-            background: #0f3460;
-            border-radius: 3px;
-            font-size: 0.75rem;
-            margin: 2px;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #1a1a2e; color: #fff; min-height: 100vh; display: flex; flex-direction: column; }
+        nav { background: #16213e; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 10px rgba(0,0,0,0.3); }
+        nav h1 { font-size: 1.5rem; color: #e94560; }
+        nav h1 span { color: #fff; }
+        .user-info { display: flex; align-items: center; gap: 15px; }
+        .user-info span { color: #aaa; }
+        .btn { padding: 8px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 0.9rem; transition: 0.2s; }
+        .btn-primary { background: #e94560; color: #fff; }
+        .btn-primary:hover { background: #c73652; }
+        .btn-secondary { background: #0f3460; color: #fff; }
+        .btn-secondary:hover { background: #1a4a7a; }
+        .btn-danger { background: #ff4444; color: #fff; }
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 100; justify-content: center; align-items: center; }
+        .modal-overlay.active { display: flex; }
+        .modal { background: #16213e; padding: 30px; border-radius: 10px; width: 380px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .modal h2 { margin-bottom: 20px; color: #e94560; }
+        .modal input { width: 100%; padding: 10px 15px; margin-bottom: 15px; border: 1px solid #333; border-radius: 5px; background: #1a1a2e; color: #fff; font-size: 0.95rem; }
+        .modal input:focus { outline: none; border-color: #e94560; }
+        .modal .btn { width: 100%; padding: 12px; font-size: 1rem; }
+        .modal .toggle { text-align: center; margin-top: 15px; color: #aaa; }
+        .modal .toggle a { color: #e94560; cursor: pointer; text-decoration: none; }
+        .error-msg { color: #ff4444; font-size: 0.85rem; margin-bottom: 10px; display: none; }
+        .main-content { display: flex; flex: 1; overflow: hidden; }
+        .sidebar { width: 250px; background: #16213e; padding: 20px; display: flex; flex-direction: column; gap: 15px; border-right: 1px solid #333; }
+        .sidebar h3 { color: #e94560; font-size: 1rem; }
+        .sidebar input { width: 100%; padding: 8px 12px; border: 1px solid #333; border-radius: 5px; background: #1a1a2e; color: #fff; font-size: 0.85rem; }
+        .sidebar input:focus { outline: none; border-color: #e94560; }
+        .room-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+        .room-item { padding: 10px 12px; background: #1a1a2e; border-radius: 5px; cursor: pointer; transition: 0.2s; border: 1px solid transparent; }
+        .room-item:hover { border-color: #e94560; }
+        .room-item.active { border-color: #e94560; background: #0f3460; }
+        .room-item .room-name { font-weight: bold; font-size: 0.9rem; }
+        .room-item .room-creator { font-size: 0.75rem; color: #aaa; margin-top: 3px; }
+        .canvas-area { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; gap: 15px; }
+        .canvas-area.hidden { display: none; }
+        .toolbar { display: flex; gap: 10px; align-items: center; background: #16213e; padding: 10px 20px; border-radius: 10px; }
+        .toolbar label { font-size: 0.85rem; color: #aaa; }
+        .toolbar input[type="color"] { width: 35px; height: 35px; border: none; border-radius: 50%; cursor: pointer; background: none; }
+        .toolbar input[type="range"] { width: 100px; accent-color: #e94560; }
+        .toolbar .size-display { font-size: 0.8rem; color: #fff; min-width: 30px; }
+        .toolbar .btn { padding: 6px 15px; }
+        .toolbar .btn.active { background: #e94560; }
+        canvas { background: #fff; border-radius: 10px; box-shadow: 0 5px 20px rgba(0,0,0,0.3); cursor: crosshair; }
+        .no-room { text-align: center; color: #555; }
+        .no-room h2 { font-size: 1.5rem; margin-bottom: 10px; }
+        .hidden { display: none !important; }
+        .ws-status { font-size: 0.75rem; color: #aaa; text-align: center; margin-top: 5px; }
+        .ws-status.connected { color: #2ecc71; }
+        .ws-status.disconnected { color: #e74c3c; }
+        .users-list { margin-top: 10px; padding: 10px; background: #1a1a2e; border-radius: 5px; }
+        .users-list h4 { color: #e94560; font-size: 0.85rem; margin-bottom: 5px; }
+        .users-list .user-tag { display: inline-block; padding: 3px 8px; background: #0f3460; border-radius: 3px; font-size: 0.75rem; margin: 2px; }
     </style>
 </head>
 <body>
-
-    <!-- Navbar -->
     <nav>
         <h1>Burhan's <span>Drawing App</span></h1>
         <div class="user-info" id="userInfo">
@@ -387,7 +69,6 @@
         </div>
     </nav>
 
-    <!-- Login Modal -->
     <div class="modal-overlay" id="loginModal">
         <div class="modal">
             <h2>Login</h2>
@@ -399,7 +80,6 @@
         </div>
     </div>
 
-    <!-- Signup Modal -->
     <div class="modal-overlay" id="signupModal">
         <div class="modal">
             <h2>Sign Up</h2>
@@ -412,9 +92,7 @@
         </div>
     </div>
 
-    <!-- Main Content -->
     <div class="main-content">
-        <!-- Sidebar -->
         <div class="sidebar">
             <h3>Rooms</h3>
             <input type="text" id="roomNameInput" placeholder="New room name..." class="hidden">
@@ -424,7 +102,6 @@
             </div>
         </div>
 
-        <!-- Canvas Area -->
         <div class="canvas-area" id="canvasArea">
             <div class="no-room" id="noRoom">
                 <h2>Welcome to Burhan's Drawing App</h2>
@@ -436,21 +113,17 @@
                 <div id="usersTags"></div>
             </div>
 
-            <div id="lockBanner" class="lock-banner ready hidden">Click canvas to start drawing</div>
             <div id="wsStatus" class="ws-status hidden">Connecting...</div>
 
             <div class="toolbar hidden" id="toolbar">
                 <label>Color:</label>
                 <input type="color" id="penColor" value="#000000">
-
                 <label>Size:</label>
                 <input type="range" id="penSize" min="1" max="20" value="3">
                 <span class="size-display" id="sizeDisplay">3</span>
-
                 <button class="btn btn-secondary active" id="penBtn" onclick="setTool('pen')">Pen</button>
                 <button class="btn btn-secondary" id="eraserBtn" onclick="setTool('eraser')">Eraser</button>
                 <button class="btn btn-danger" onclick="clearCanvas()">Clear</button>
-                <button class="btn btn-secondary" id="releaseBtn" onclick="releaseLock()" style="display:none;">Release</button>
             </div>
 
             <canvas id="drawCanvas" class="hidden" width="900" height="550"></canvas>
@@ -458,461 +131,6 @@
     </div>
 
     <script>
-        // ---- State ----
         const API = 'http://127.0.0.1:8000';
         const WS_BASE = 'ws://127.0.0.1:8000';
-        let token = localStorage.getItem('token');
-        let currentUser = null;
-        let currentRoom = null;
-        let ws = null;
-        let hasLock = false;
-        let usersInRoom = [];
-        let pendingDrawPos = null; // {x, y} from click that requested the lock
-        let lockTimer = null; // auto-release timer
-
-        // ---- Canvas State ----
-        const canvas = document.getElementById('drawCanvas');
-        const ctx = canvas.getContext('2d');
-        let isDrawing = false;
-        let lastX = 0;
-        let lastY = 0;
-        let currentTool = 'pen';
-        let penColor = '#000000';
-        let penSize = 3;
-
-        // ---- Init ----
-        if (token) {
-            loadRooms();
-            showLoggedInUI();
-        }
-
-        // ---- Auth ----
-        function showModal(type) {
-            document.getElementById('loginModal').classList.toggle('active', type === 'login');
-            document.getElementById('signupModal').classList.toggle('active', type === 'signup');
-        }
-
-        async function signup() {
-            const username = document.getElementById('signupUsername').value;
-            const email = document.getElementById('signupEmail').value;
-            const password = document.getElementById('signupPassword').value;
-            const errEl = document.getElementById('signupError');
-
-            try {
-                const resp = await fetch(`${API}/auth/signup`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, email, password })
-                });
-                const data = await resp.json();
-                if (!resp.ok) throw new Error(data.detail);
-                document.getElementById('loginUsername').value = username;
-                document.getElementById('loginPassword').value = password;
-                showModal('login');
-                login();
-            } catch (e) {
-                errEl.textContent = e.message;
-                errEl.style.display = 'block';
-            }
-        }
-
-        async function login() {
-            const username = document.getElementById('loginUsername').value;
-            const password = document.getElementById('loginPassword').value;
-            const errEl = document.getElementById('loginError');
-
-            try {
-                const formBody = new URLSearchParams();
-                formBody.append('username', username);
-                formBody.append('password', password);
-
-                const resp = await fetch(`${API}/auth/login`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: formBody.toString()
-                });
-                const data = await resp.json();
-                if (!resp.ok) throw new Error(data.detail);
-
-                token = data.access_token;
-                localStorage.setItem('token', token);
-                showModal(null);
-                showLoggedInUI();
-                loadRooms();
-            } catch (e) {
-                errEl.textContent = e.message;
-                errEl.style.display = 'block';
-            }
-        }
-
-        function logout() {
-            disconnectWebSocket();
-            token = null;
-            localStorage.removeItem('token');
-            document.getElementById('userInfo').innerHTML = `
-                <span>Not logged in</span>
-                <button class="btn btn-primary" onclick="showModal('login')">Login</button>
-            `;
-            document.getElementById('roomNameInput').classList.add('hidden');
-            document.getElementById('createRoomBtn').classList.add('hidden');
-            document.getElementById('roomList').innerHTML = '<p style="color:#555; font-size:0.85rem;">Login to see rooms</p>';
-        }
-
-        function showLoggedInUI() {
-            document.getElementById('userInfo').innerHTML = `
-                <span>Logged in</span>
-                <button class="btn btn-secondary" onclick="logout()">Logout</button>
-            `;
-            document.getElementById('roomNameInput').classList.remove('hidden');
-            document.getElementById('createRoomBtn').classList.remove('hidden');
-        }
-
-        // ---- Rooms ----
-        async function loadRooms() {
-            try {
-                const resp = await fetch(`${API}/rooms/`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const rooms = await resp.json();
-                const roomList = document.getElementById('roomList');
-                if (rooms.length === 0) {
-                    roomList.innerHTML = '<p style="color:#555; font-size:0.85rem;">No rooms yet. Create one!</p>';
-                    return;
-                }
-                roomList.innerHTML = rooms.map(room => `
-                    <div class="room-item ${currentRoom?.id === room.id ? 'active' : ''}" onclick="selectRoom(${room.id}, '${room.name}')">
-                        <div class="room-name">${room.name}</div>
-                        <div class="room-creator">by User #${room.creator_id}</div>
-                    </div>
-                `).join('');
-            } catch (e) {
-                console.error('Failed to load rooms:', e);
-            }
-        }
-
-        async function createRoom() {
-            const name = document.getElementById('roomNameInput').value.trim();
-            if (!name) return alert('Enter a room name');
-
-            try {
-                const resp = await fetch(`${API}/rooms/`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({ name })
-                });
-                if (!resp.ok) throw new Error('Failed to create room');
-                document.getElementById('roomNameInput').value = '';
-                loadRooms();
-            } catch (e) {
-                alert(e.message);
-            }
-        }
-
-        // ---- Room Selection + WebSocket ----
-        async function selectRoom(roomId, roomName) {
-            // Disconnect from old room
-            disconnectWebSocket();
-            hasLock = false;
-            isDrawing = false;
-            usersInRoom = [];
-            clearTimeout(lockTimer);
-
-            // Auto-join room if not already a member
-            try {
-                await fetch(`${API}/rooms/${roomId}/join`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                // 200 = joined, 400 = already member (both fine)
-            } catch (e) { /* ignore - might already be member */ }
-
-            currentRoom = { id: roomId, name: roomName };
-            document.getElementById('noRoom').classList.add('hidden');
-            document.getElementById('toolbar').classList.remove('hidden');
-            document.getElementById('drawCanvas').classList.remove('hidden');
-            document.getElementById('lockBanner').classList.remove('hidden');
-            document.getElementById('wsStatus').classList.remove('hidden');
-            document.getElementById('usersList').classList.remove('hidden');
-            document.getElementById('roomList').querySelectorAll('.room-item').forEach(el => el.classList.remove('active'));
-            loadRooms();
-            clearCanvas();
-
-            // Connect WebSocket
-            connectWebSocket(roomId);
-        }
-
-        // ---- WebSocket ----
-        function connectWebSocket(roomId) {
-            const statusEl = document.getElementById('wsStatus');
-            statusEl.textContent = 'Connecting...';
-            statusEl.className = 'ws-status';
-
-            ws = new WebSocket(`${WS_BASE}/ws/${roomId}?token=${token}`);
-
-            ws.onopen = () => {
-                statusEl.textContent = 'Connected';
-                statusEl.className = 'ws-status connected';
-                updateLockBanner('ready');
-            };
-
-            ws.onclose = (e) => {
-                hasLock = false;
-                // Don't reconnect on auth failure (4001 = bad token, 4003 = not member)
-                if (e.code === 4001 || e.code === 4003) {
-                    statusEl.textContent = e.reason || 'Connection rejected';
-                    statusEl.className = 'ws-status disconnected';
-                    updateLockBanner('ready', e.reason || 'Cannot connect to room');
-                    return;
-                }
-                statusEl.textContent = 'Disconnected';
-                statusEl.className = 'ws-status disconnected';
-                updateLockBanner('ready');
-                // Reconnect after 2 seconds
-                if (currentRoom) {
-                    setTimeout(() => connectWebSocket(roomId), 2000);
-                }
-            };
-
-            ws.onerror = () => {
-                statusEl.textContent = 'Connection error';
-                statusEl.className = 'ws-status disconnected';
-            };
-
-            ws.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                handleWSMessage(data);
-            };
-        }
-
-        function disconnectWebSocket() {
-            if (ws) {
-                ws.close();
-                ws = null;
-            }
-            document.getElementById('lockBanner').classList.add('hidden');
-            document.getElementById('wsStatus').classList.add('hidden');
-            document.getElementById('usersList').classList.add('hidden');
-        }
-
-        function sendWS(data) {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify(data));
-            }
-        }
-
-        // ---- Handle WebSocket Messages ----
-        function handleWSMessage(data) {
-            switch (data.type) {
-                case 'draw':
-                    drawRemote(data);
-                    break;
-
-                case 'lock_granted':
-                    // Only I get this - I have the lock
-                    hasLock = true;
-                    updateLockBanner('drawing');
-                    // If user clicked while waiting for lock, start drawing from that point
-                    if (pendingDrawPos) {
-                        isDrawing = true;
-                        [lastX, lastY] = [pendingDrawPos.x, pendingDrawPos.y];
-                        pendingDrawPos = null;
-                    }
-                    break;
-
-                case 'locked_by':
-                    // Someone else got the lock
-                    hasLock = false;
-                    isDrawing = false;
-                    updateLockBanner('locked', data.username + ' is drawing...');
-                    break;
-
-                case 'lock_denied':
-                    hasLock = false;
-                    isDrawing = false;
-                    updateLockBanner('locked', data.message);
-                    break;
-
-                case 'lock_released':
-                    hasLock = false;
-                    isDrawing = false;
-                    updateLockBanner('ready');
-                    break;
-
-                case 'user_joined':
-                    usersInRoom = data.users;
-                    updateUsersList();
-                    break;
-
-                case 'user_left':
-                    usersInRoom = data.users;
-                    updateUsersList();
-                    break;
-
-                case 'error':
-                    console.error('Server error:', data.message);
-                    break;
-            }
-        }
-
-        // ---- Lock Banner ----
-        function updateLockBanner(state, message) {
-            const banner = document.getElementById('lockBanner');
-            const releaseBtn = document.getElementById('releaseBtn');
-            banner.classList.remove('hidden', 'drawing', 'locked', 'ready');
-            if (state === 'drawing') {
-                banner.className = 'lock-banner drawing';
-                banner.textContent = 'You are drawing. Others can see.';
-                releaseBtn.style.display = 'inline-block';
-            } else if (state === 'locked') {
-                banner.className = 'lock-banner locked';
-                banner.textContent = message || 'Someone else is drawing...';
-                releaseBtn.style.display = 'none';
-            } else {
-                banner.className = 'lock-banner ready';
-                banner.textContent = 'Click canvas to start drawing';
-                releaseBtn.style.display = 'none';
-            }
-        }
-
-        // ---- Users List ----
-        function updateUsersList() {
-            const tagsEl = document.getElementById('usersTags');
-            tagsEl.innerHTML = usersInRoom.map(u =>
-                `<span class="user-tag">${u.username}</span>`
-            ).join('');
-        }
-
-        // ---- Canvas Drawing ----
-        const sizeDisplay = document.getElementById('sizeDisplay');
-        const penColorInput = document.getElementById('penColor');
-        const penSizeInput = document.getElementById('penSize');
-
-        penColorInput.addEventListener('input', (e) => { penColor = e.target.value; });
-        penSizeInput.addEventListener('input', (e) => {
-            penSize = parseInt(e.target.value);
-            sizeDisplay.textContent = penSize;
-        });
-
-        function setTool(tool) {
-            currentTool = tool;
-            document.getElementById('penBtn').classList.toggle('active', tool === 'pen');
-            document.getElementById('eraserBtn').classList.toggle('active', tool === 'eraser');
-            if (tool === 'eraser') {
-                canvas.style.cursor = 'cell';
-            } else {
-                canvas.style.cursor = 'crosshair';
-            }
-        }
-
-        function clearCanvas() {
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-        }
-
-        // ---- Draw locally ----
-        function drawLocal(x1, y1, x2, y2, color, size, tool) {
-            ctx.beginPath();
-            ctx.moveTo(x1, y1);
-            ctx.lineTo(x2, y2);
-            if (tool === 'eraser') {
-                ctx.strokeStyle = '#ffffff';
-                ctx.lineWidth = size * 5;
-            } else {
-                ctx.strokeStyle = color;
-                ctx.lineWidth = size;
-            }
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.stroke();
-        }
-
-        // ---- Draw from remote user ----
-        function drawRemote(data) {
-            drawLocal(data.x1, data.y1, data.x2, data.y2, data.color, data.size, data.tool);
-        }
-
-        // ---- Lock Timer (auto-release after 5 seconds of no drawing) ----
-        function resetLockTimer() {
-            clearTimeout(lockTimer);
-            lockTimer = setTimeout(() => {
-                if (hasLock) {
-                    sendWS({ type: 'lock_release' });
-                    hasLock = false;
-                    isDrawing = false;
-                    updateLockBanner('ready', 'Lock released (inactivity)');
-                }
-            }, 5000); // 5 seconds
-        }
-
-        function releaseLock() {
-            clearTimeout(lockTimer);
-            if (hasLock) {
-                sendWS({ type: 'lock_release' });
-                hasLock = false;
-                isDrawing = false;
-                updateLockBanner('ready');
-            }
-        }
-
-        // ---- Canvas Events ----
-        canvas.addEventListener('mousedown', (e) => {
-            if (!currentRoom) return;
-            if (!hasLock) {
-                // Request the lock and remember where user clicked
-                pendingDrawPos = { x: e.offsetX, y: e.offsetY };
-                sendWS({ type: 'lock_request' });
-                return;
-            }
-            isDrawing = true;
-            [lastX, lastY] = [e.offsetX, e.offsetY];
-            resetLockTimer();
-        });
-
-        canvas.addEventListener('mousemove', (e) => {
-            if (!isDrawing || !hasLock) return;
-
-            const x1 = lastX, y1 = lastY;
-            const x2 = e.offsetX, y2 = e.offsetY;
-
-            // Draw locally
-            drawLocal(x1, y1, x2, y2, penColor, penSize, currentTool);
-
-            // Send to server
-            sendWS({
-                type: 'draw',
-                x1, y1, x2, y2,
-                color: penColor,
-                size: penSize,
-                tool: currentTool
-            });
-
-            [lastX, lastY] = [x2, y2];
-            resetLockTimer();
-        });
-
-        canvas.addEventListener('mouseup', () => {
-            isDrawing = false;
-            resetLockTimer();
-        });
-
-        canvas.addEventListener('mouseout', () => {
-            isDrawing = false;
-            resetLockTimer();
-        });
-
-        // ---- Handle Enter key in modals ----
-        document.getElementById('loginPassword').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') login();
-        });
-        document.getElementById('signupPassword').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') signup();
-        });
-        document.getElementById('roomNameInput').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') createRoom();
-        });
-    </script>
-</body>
-</html>
+        let token = localStorage.ge
