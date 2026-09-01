@@ -1,4 +1,5 @@
 import json
+import asyncio
 from typing import Dict, List, Optional
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from jose import JWTError, jwt
@@ -18,6 +19,9 @@ room_connections: Dict[int, Dict[int, dict]] = {}
 # room_id -> list of draw events (canvas history)
 canvas_history: Dict[int, List[dict]] = {}
 
+# Pending game events queue: room_id -> list of message dicts
+pending_events: Dict[int, List[dict]] = {}
+
 
 def verify_token_from_query(token: str) -> Optional[int]:
     """Verify JWT token from query parameter and return user_id."""
@@ -36,6 +40,30 @@ def verify_token_from_query(token: str) -> Optional[int]:
         return None
 
 
+def push_event(room_id: int, message: dict):
+    """Queue a message to be sent to all connections in a room (called from sync context)."""
+    if room_id not in pending_events:
+        pending_events[room_id] = []
+    pending_events[room_id].append(message)
+    print(f"[EVENT] Queued '{message.get('type')}' for room {room_id}")
+
+
+async def flush_events(room_id: int):
+    """Send all pending events to connections in a room (called from async context)."""
+    events = pending_events.pop(room_id, [])
+    connections = room_connections.get(room_id, {})
+    for message in events:
+        dead = []
+        for uid, conn in connections.items():
+            try:
+                await conn["ws"].send_text(json.dumps(message))
+            except Exception:
+                dead.append(uid)
+        for uid in dead:
+            connections.pop(uid, None)
+        print(f"[EVENT] Sent '{message.get('type')}' to {len(connections)} users in room {room_id}")
+
+
 async def broadcast_to_room(room_id: int, message: dict, exclude_user_id: Optional[int] = None):
     """Send a message to all connections in a room."""
     connections = room_connections.get(room_id, {})
@@ -47,13 +75,8 @@ async def broadcast_to_room(room_id: int, message: dict, exclude_user_id: Option
             await conn["ws"].send_text(json.dumps(message))
         except Exception:
             dead.append(uid)
-    # Clean up dead connections
     for uid in dead:
         connections.pop(uid, None)
-        print(f"[WS] Cleaned dead connection: user {uid} in room {room_id}")
-    # If room is empty, clean up
-    if not connections and room_id in room_connections:
-        del room_connections[room_id]
 
 
 @router.websocket("/ws/{room_id}")
@@ -87,6 +110,9 @@ async def websocket_endpoint(websocket: WebSocket, room_id: int, token: str = Qu
         room_connections[room_id] = {}
     room_connections[room_id][user_id] = connection
 
+    # ---- Flush any pending events for this room ----
+    await flush_events(room_id)
+
     # ---- Send canvas history to new joiner ----
     if room_id in canvas_history and canvas_history[room_id]:
         try:
@@ -110,6 +136,15 @@ async def websocket_endpoint(websocket: WebSocket, room_id: int, token: str = Qu
     })
 
     print(f"[WS] {username} joined room {room_id}")
+
+    # ---- Background flush task ----
+    async def periodic_flush():
+        while True:
+            await asyncio.sleep(0.5)
+            if room_id in pending_events and pending_events[room_id]:
+                await flush_events(room_id)
+
+    flush_task = asyncio.create_task(periodic_flush())
 
     # ---- Main message loop ----
     try:
@@ -143,19 +178,27 @@ async def websocket_endpoint(websocket: WebSocket, room_id: int, token: str = Qu
                 }, exclude_user_id=user_id)
 
             elif msg_type == "pong":
-                # Client responded to ping, connection is alive
                 pass
+
+            # After processing any message, flush pending events
+            await flush_events(room_id)
 
     except WebSocketDisconnect:
         print(f"[WS] {username} disconnected from room {room_id}")
     except Exception as e:
         print(f"[WS] Error: {e}")
     finally:
+        # Cancel flush task
+        flush_task.cancel()
+        try:
+            await flush_task
+        except asyncio.CancelledError:
+            pass
+
         # ---- Cleanup ----
         connections = room_connections.get(room_id, {})
         connections.pop(user_id, None)
 
-        # Notify others
         await broadcast_to_room(room_id, {
             "type": "user_left",
             "user_id": user_id,
@@ -170,8 +213,8 @@ async def websocket_endpoint(websocket: WebSocket, room_id: int, token: str = Qu
             del room_connections[room_id]
 
 
-# ---- Helper: broadcast game events (called from game router) ----
-async def broadcast_game_event(room_id: int, event_type: str, data: dict):
-    """Broadcast a game event to all connections in a room."""
+# ---- Helper: broadcast game events (called from sync game router) ----
+def broadcast_game_event_sync(room_id: int, event_type: str, data: dict):
+    """Queue a game event to be sent (called from sync context, flushed by WS handler)."""
     message = {"type": event_type, **data}
-    await broadcast_to_room(room_id, message)
+    push_event(room_id, message)

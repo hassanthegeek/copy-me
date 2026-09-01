@@ -1,4 +1,3 @@
-import asyncio
 from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -14,13 +13,10 @@ router = APIRouter(prefix="/rooms", tags=["Game"])
 
 
 def schedule_broadcast(room_id: int, event_type: str, data: dict):
-    """Schedule a WebSocket broadcast from a sync context."""
+    """Queue a WebSocket broadcast from a sync context."""
     try:
-        from app.routers.websocket import broadcast_game_event
-        loop = asyncio.get_event_loop()
-        asyncio.run_coroutine_threadsafe(
-            broadcast_game_event(room_id, event_type, data), loop
-        )
+        from app.routers.websocket import broadcast_game_event_sync
+        broadcast_game_event_sync(room_id, event_type, data)
     except Exception as e:
         print(f"[GAME] Broadcast failed: {e}")
 
