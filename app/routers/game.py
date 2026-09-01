@@ -203,6 +203,7 @@ def get_game_status(room_id: int, current_user: User = Depends(get_current_user)
                 "drawer_name": drawer_name,
                 "prompt": current_round.prompt if is_drawer else None,  # Only show to drawer
                 "round_number": current_round.round_number,
+                "winner_id": current_round.winner_id,
                 "started_at": current_round.started_at.isoformat() if current_round else None
             },
             "scoreboard": scoreboard,

@@ -916,8 +916,13 @@
                 currentGame = data;
                 isDrawer = data.is_drawer;
                 
-                // Hide round result for new round
-                document.getElementById('roundResult').classList.add('hidden');
+                // Always hide start button when game is active
+                document.getElementById('startGameBtn').classList.add('hidden');
+                
+                // Only hide round result if round hasn't ended yet (no winner)
+                if (!data.round || !data.round.winner_id) {
+                    document.getElementById('roundResult').classList.add('hidden');
+                }
                 
                 // Update round info
                 document.getElementById('roundText').textContent = `Round ${data.current_round}/${data.total_rounds}`;
@@ -940,8 +945,10 @@
                 // Update scoreboard
                 updateScoreboard(data.scoreboard);
                 
-                // Start timer
-                startTimer();
+                // Only start timer if round is still in progress (no winner yet)
+                if (!data.round.winner_id) {
+                    startTimer();
+                }
             } catch (e) {
                 console.error('Failed to load game status:', e);
             }
@@ -1006,6 +1013,7 @@
                         `+${data.guesser_points} points for you, +${data.drawer_points} for drawer<br>`;
                     guessInput.value = '';
                     document.getElementById('guessArea').classList.add('hidden');
+                    clearInterval(gameTimer);
                     loadGameStatus();
                 } else {
                     // Wrong guess - shake input
