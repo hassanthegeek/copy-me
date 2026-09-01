@@ -626,8 +626,10 @@
 
         // ---- Init ----
         if (token) {
-            loadRooms();
-            showLoggedInUI();
+            fetchCurrentUser().then(() => {
+                loadRooms();
+                showLoggedInUI();
+            });
         }
 
         // ---- Auth ----
@@ -680,6 +682,7 @@
 
                 token = data.access_token;
                 localStorage.setItem('token', token);
+                await fetchCurrentUser();
                 showModal(null);
                 showLoggedInUI();
                 loadRooms();
@@ -700,6 +703,19 @@
             document.getElementById('roomNameInput').classList.add('hidden');
             document.getElementById('createRoomBtn').classList.add('hidden');
             document.getElementById('roomList').innerHTML = '<p style="color:#555; font-size:0.85rem;">Login to see rooms</p>';
+        }
+
+        async function fetchCurrentUser() {
+            try {
+                const resp = await fetch(`${API}/auth/me`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (resp.ok) {
+                    currentUser = await resp.json();
+                }
+            } catch (e) {
+                console.error('Failed to fetch user:', e);
+            }
         }
 
         function showLoggedInUI() {

@@ -4,7 +4,7 @@ from sqlmodel import Session, select
 from app.database import engine
 from app.models import User
 from app.schemas import UserCreate, UserResponse, Token
-from app.auth import hash_password, verify_password, create_access_token
+from app.auth import hash_password, verify_password, create_access_token, get_current_user
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -49,3 +49,8 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
 
         access_token = create_access_token(data={"sub": str(db_user.id)})
         return {"access_token": access_token, "token_type": "bearer"}
+
+
+@router.get("/me", response_model=UserResponse)
+def get_me(current_user: User = Depends(get_current_user)):
+    return current_user
