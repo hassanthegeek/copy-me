@@ -1,4 +1,5 @@
 import json
+import asyncio
 from typing import Dict, Optional
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from jose import JWTError, jwt
@@ -44,8 +45,44 @@ async def broadcast_to_room(room_id: int, message: dict, exclude_user_id: Option
             await conn["ws"].send_text(json.dumps(message))
         except Exception:
             dead.append(uid)
+    # Clean up dead connections
     for uid in dead:
         connections.pop(uid, None)
+        print(f"[WS] Cleaned dead connection: user {uid} in room {room_id}")
+    # If room is empty, clean up
+    if not connections and room_id in room_connections:
+        del room_connections[room_id]
+
+
+async def keepalive_ping(room_id: int, user_id: int, ws: WebSocket):
+    """Send periodic pings to detect dead connections."""
+    try:
+        while True:
+            await asyncio.sleep(30)  # ping every 30 seconds
+            connections = room_connections.get(room_id, {})
+            if user_id not in connections:
+                break  # connection was cleaned up
+            try:
+                await ws.send_json({"type": "ping"})
+            except Exception:
+                # Connection is dead, clean it up
+                print(f"[WS] Keepalive ping failed for user {user_id} in room {room_id}")
+                connections.pop(user_id, None)
+                # Notify others
+                await broadcast_to_room(room_id, {
+                    "type": "user_left",
+                    "user_id": user_id,
+                    "username": connections.get(user_id, {}).get("username", "unknown"),
+                    "users": [
+                        {"user_id": uid, "username": c["username"]}
+                        for uid, c in connections.items()
+                    ]
+                })
+                if not connections and room_id in room_connections:
+                    del room_connections[room_id]
+                break
+    except asyncio.CancelledError:
+        pass
 
 
 @router.websocket("/ws/{room_id}")
@@ -78,6 +115,9 @@ async def websocket_endpoint(websocket: WebSocket, room_id: int, token: str = Qu
     if room_id not in room_connections:
         room_connections[room_id] = {}
     room_connections[room_id][user_id] = connection
+
+    # Start keepalive ping task
+    ping_task = asyncio.create_task(keepalive_ping(room_id, user_id, websocket))
 
     # Tell everyone someone joined
     await broadcast_to_room(room_id, {
@@ -115,6 +155,7 @@ async def websocket_endpoint(websocket: WebSocket, room_id: int, token: str = Qu
                 }, exclude_user_id=user_id)
 
             elif msg_type == "cursor_move":
+                # Broadcast cursor position to others
                 await broadcast_to_room(room_id, {
                     "type": "cursor_move",
                     "user_id": user_id,
@@ -123,11 +164,22 @@ async def websocket_endpoint(websocket: WebSocket, room_id: int, token: str = Qu
                     "y": data.get("y")
                 }, exclude_user_id=user_id)
 
+            elif msg_type == "pong":
+                # Client responded to ping, connection is alive
+                pass
+
     except WebSocketDisconnect:
         print(f"[WS] {username} disconnected from room {room_id}")
     except Exception as e:
         print(f"[WS] Error: {e}")
     finally:
+        # Cancel keepalive task
+        ping_task.cancel()
+        try:
+            await ping_task
+        except asyncio.CancelledError:
+            pass
+
         # ---- Cleanup ----
         connections = room_connections.get(room_id, {})
         connections.pop(user_id, None)
