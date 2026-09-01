@@ -630,9 +630,9 @@
                 }
                 statusEl.textContent = 'Disconnected - reconnecting...';
                 statusEl.className = 'ws-status disconnected';
-                // Auto-reconnect with backoff
+                // Reconnect after 2 seconds
                 if (currentRoom) {
-                    setTimeout(() => connectWebSocket(roomId), 3000);
+                    setTimeout(() => connectWebSocket(roomId), 2000);
                 }
             };
 
@@ -667,11 +667,6 @@
             switch (data.type) {
                 case 'draw':
                     drawRemote(data);
-                    break;
-
-                case 'ping':
-                    // Server keepalive - respond immediately
-                    sendWS({ type: 'pong' });
                     break;
 
                 case 'user_joined':
