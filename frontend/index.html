@@ -409,6 +409,17 @@
             gap: 10px;
             margin-bottom: 10px;
         }
+        .round-result {
+            text-align: center;
+            padding: 15px;
+            background: #0f3460;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        .round-result p {
+            margin-bottom: 10px;
+            font-size: 1.1rem;
+        }
         .guess-input {
             flex: 1;
             padding: 10px 15px;
@@ -541,6 +552,10 @@
                 <div class="guess-area hidden" id="guessArea">
                     <input type="text" id="guessInput" placeholder="Type your guess..." class="guess-input">
                     <button class="btn btn-primary" onclick="submitGuess()">Guess</button>
+                </div>
+                <div class="round-result hidden" id="roundResult">
+                    <p id="roundResultText"></p>
+                    <button class="btn btn-primary" onclick="nextRound()">Next Round ➡️</button>
                 </div>
                 <div class="scoreboard hidden" id="scoreboard">
                     <h4>🏆 Scoreboard</h4>
@@ -836,6 +851,9 @@
                 currentGame = data;
                 isDrawer = data.is_drawer;
                 
+                // Hide round result for new round
+                document.getElementById('roundResult').classList.add('hidden');
+                
                 // Update round info
                 document.getElementById('roundText').textContent = `Round ${data.current_round}/${data.total_rounds}`;
                 
@@ -916,7 +934,11 @@
                 if (!resp.ok) throw new Error(data.detail);
                 
                 if (data.correct) {
-                    alert(`🎉 Correct! It was "${data.prompt}"!\n+${data.guesser_points} points for you, +${data.drawer_points} for drawer`);
+                    // Show round result
+                    document.getElementById('roundResult').classList.remove('hidden');
+                    document.getElementById('roundResultText').innerHTML = 
+                        `🎉 Correct! It was "<strong>${data.prompt}</strong>"<br>` +
+                        `+${data.guesser_points} points for you, +${data.drawer_points} for drawer<br>`;
                     guessInput.value = '';
                     document.getElementById('guessArea').classList.add('hidden');
                     loadGameStatus();
@@ -926,6 +948,31 @@
                     setTimeout(() => { guessInput.style.borderColor = '#333'; }, 500);
                     guessInput.value = '';
                 }
+            } catch (e) {
+                alert(e.message);
+            }
+        }
+
+        async function nextRound() {
+            if (!currentRoom) return;
+            try {
+                const resp = await fetch(`${API}/rooms/${currentRoom.id}/game/next-round`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.detail);
+                
+                if (data.status === 'game_over') {
+                    alert('🏆 Game Over! Check the scoreboard.');
+                    document.getElementById('roundResult').classList.add('hidden');
+                    loadGameStatus();
+                    return;
+                }
+                
+                // Hide round result, load new round
+                document.getElementById('roundResult').classList.add('hidden');
+                loadGameStatus();
             } catch (e) {
                 alert(e.message);
             }
