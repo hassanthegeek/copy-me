@@ -227,6 +227,23 @@
             color: #aaa;
             margin-top: 3px;
         }
+        .room-item .btn-delete {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: #ff4444;
+            color: #fff;
+            border: none;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            font-size: 0.7rem;
+            cursor: pointer;
+            display: none;
+        }
+        .room-item:hover .btn-delete {
+            display: block;
+        }
 
         /* ---- Canvas Area ---- */
         .canvas-area {
@@ -706,9 +723,10 @@
                     return;
                 }
                 roomList.innerHTML = rooms.map(room => `
-                    <div class="room-item ${currentRoom?.id === room.id ? 'active' : ''}" onclick="selectRoom(${room.id}, '${room.name}')">
+                    <div class="room-item ${currentRoom?.id === room.id ? 'active' : ''}" onclick="selectRoom(${room.id}, '${room.name}', ${room.creator_id})">
                         <div class="room-name">${room.name}</div>
                         <div class="room-creator">by User #${room.creator_id}</div>
+                        ${currentUser && room.creator_id === currentUser.id ? `<button class="btn-delete" onclick="event.stopPropagation(); deleteRoom(${room.id})">✕</button>` : ''}
                     </div>
                 `).join('');
             } catch (e) {
@@ -737,8 +755,30 @@
             }
         }
 
+        async function deleteRoom(roomId) {
+            if (!confirm('Are you sure you want to delete this room?')) return;
+            try {
+                const resp = await fetch(`${API}/rooms/${roomId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!resp.ok) throw new Error('Failed to delete room');
+                if (currentRoom && currentRoom.id === roomId) {
+                    disconnectWebSocket();
+                    currentRoom = null;
+                    document.getElementById('noRoom').classList.remove('hidden');
+                    document.getElementById('toolbar').classList.add('hidden');
+                    document.getElementById('drawCanvas').classList.add('hidden');
+                    document.getElementById('gamePanel').classList.add('hidden');
+                }
+                loadRooms();
+            } catch (e) {
+                alert(e.message);
+            }
+        }
+
         // ---- Room Selection + WebSocket ----
-        async function selectRoom(roomId, roomName) {
+        async function selectRoom(roomId, roomName, creatorId) {
             // Disconnect from old room
             disconnectWebSocket();
             isDrawing = false;
@@ -753,7 +793,7 @@
                 // 200 = joined, 400 = already member (both fine)
             } catch (e) { /* ignore - might already be member */ }
 
-            currentRoom = { id: roomId, name: roomName };
+            currentRoom = { id: roomId, name: roomName, creatorId: creatorId };
             document.getElementById('noRoom').classList.add('hidden');
             document.getElementById('toolbar').classList.remove('hidden');
             document.getElementById('drawCanvas').classList.remove('hidden');
@@ -841,7 +881,12 @@
                 if (!resp.ok) throw new Error(data.detail);
                 
                 if (data.status === 'no_active_game') {
-                    document.getElementById('startGameBtn').classList.remove('hidden');
+                    // Only show Start Game for room creator
+                    if (currentUser && currentRoom.creatorId === currentUser.id) {
+                        document.getElementById('startGameBtn').classList.remove('hidden');
+                    } else {
+                        document.getElementById('startGameBtn').classList.add('hidden');
+                    }
                     document.getElementById('roundInfo').classList.add('hidden');
                     document.getElementById('promptDisplay').classList.add('hidden');
                     document.getElementById('guessArea').classList.add('hidden');

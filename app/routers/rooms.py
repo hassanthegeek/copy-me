@@ -69,3 +69,27 @@ def get_room_members(room_id: int, current_user: User = Depends(get_current_user
             select(RoomMember).where(RoomMember.room_id == room_id)
         ).all()
         return [{"id": m.id, "room_id": m.room_id, "user_id": m.user_id, "joined_at": m.joined_at} for m in members]
+
+
+@router.delete("/{room_id}")
+def delete_room(room_id: int, current_user: User = Depends(get_current_user)):
+    """Delete a room. Only the creator can delete it."""
+    with Session(engine) as session:
+        room = session.get(Room, room_id)
+        if not room:
+            raise HTTPException(status_code=404, detail="Room not found")
+        
+        # Only creator can delete
+        if room.creator_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Only the room creator can delete it")
+        
+        # Delete all members first
+        members = session.exec(select(RoomMember).where(RoomMember.room_id == room_id)).all()
+        for member in members:
+            session.delete(member)
+        
+        # Delete the room
+        session.delete(room)
+        session.commit()
+        
+        return {"message": "Room deleted"}
