@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -10,6 +11,27 @@ from app.auth import get_current_user
 from app.words import get_random_prompt
 
 router = APIRouter(prefix="/rooms", tags=["Game"])
+
+
+def schedule_broadcast(room_id: int, event_type: str, data: dict):
+    """Schedule a WebSocket broadcast from a sync context."""
+    try:
+        from app.routers.websocket import broadcast_game_event
+        loop = asyncio.get_event_loop()
+        asyncio.run_coroutine_threadsafe(
+            broadcast_game_event(room_id, event_type, data), loop
+        )
+    except Exception as e:
+        print(f"[GAME] Broadcast failed: {e}")
+
+
+def clear_canvas_history(room_id: int):
+    """Clear canvas history when a new round starts."""
+    try:
+        from app.routers.websocket import canvas_history
+        canvas_history.pop(room_id, None)
+    except Exception:
+        pass
 
 
 def get_room_members(room_id: int, session: Session) -> List[int]:
@@ -98,6 +120,31 @@ def start_game(room_id: int, current_user: User = Depends(get_current_user)):
         
         print(f"[GAME] Started game {game.id} in room {room_id}")
         print(f"[GAME] Round 1: Drawer={first_drawer_id}, Prompt={prompt}")
+        
+        # Clear canvas for new game
+        clear_canvas_history(room_id)
+        
+        # Build scoreboard
+        scores = session.exec(select(Score).where(Score.game_id == game.id)).all()
+        scoreboard = []
+        for score in scores:
+            user = session.get(User, score.user_id)
+            if user:
+                scoreboard.append({"user_id": user.id, "username": user.username, "points": score.points})
+        
+        drawer = session.get(User, first_drawer_id)
+        
+        # Broadcast game_started event to all users via WebSocket
+        schedule_broadcast(room_id, "game_started", {
+            "game_id": game.id,
+            "current_round": 1,
+            "total_rounds": game.total_rounds,
+            "drawer_id": first_drawer_id,
+            "drawer_name": drawer.username if drawer else "Unknown",
+            "prompt": prompt,  # Will only be shown to drawer by frontend
+            "scoreboard": scoreboard,
+            "created_by": current_user.id
+        })
         
         return game
 
@@ -232,6 +279,27 @@ def submit_guess(room_id: int, guess: str, current_user: User = Depends(get_curr
             print(f"[GAME] {current_user.username} guessed '{current_round.prompt}' correctly!")
             print(f"[GAME] +{guesser_points} points to guesser, +5 to drawer")
             
+            # Build updated scoreboard
+            scores = session.exec(select(Score).where(Score.game_id == game.id)).all()
+            scoreboard = []
+            for score in scores:
+                user = session.get(User, score.user_id)
+                if user:
+                    scoreboard.append({"user_id": user.id, "username": user.username, "points": score.points})
+            scoreboard.sort(key=lambda x: x["points"], reverse=True)
+            
+            # Broadcast correct guess to all users
+            schedule_broadcast(room_id, "guess_correct", {
+                "user_id": current_user.id,
+                "username": current_user.username,
+                "prompt": current_round.prompt,
+                "guesser_points": guesser_points,
+                "drawer_points": 5,
+                "time_elapsed": round(time_elapsed, 1),
+                "scoreboard": scoreboard,
+                "round_number": current_round.round_number
+            })
+            
             return {
                 "correct": True,
                 "prompt": current_round.prompt,
@@ -241,6 +309,13 @@ def submit_guess(room_id: int, guess: str, current_user: User = Depends(get_curr
                 "winner": current_user.username
             }
         else:
+            # Broadcast wrong guess to all users
+            schedule_broadcast(room_id, "guess_wrong", {
+                "user_id": current_user.id,
+                "username": current_user.username,
+                "guess": guess
+            })
+            
             return {
                 "correct": False,
                 "guess": guess
@@ -283,6 +358,23 @@ def next_round(room_id: int, current_user: User = Depends(get_current_user)):
             session.add(game)
             session.commit()
             
+            # Build final scoreboard
+            scores = session.exec(select(Score).where(Score.game_id == game.id)).all()
+            scoreboard = []
+            for score in scores:
+                user = session.get(User, score.user_id)
+                if user:
+                    scoreboard.append({"user_id": user.id, "username": user.username, "points": score.points})
+            scoreboard.sort(key=lambda x: x["points"], reverse=True)
+            winner = scoreboard[0] if scoreboard else None
+            
+            # Broadcast game over
+            schedule_broadcast(room_id, "game_over", {
+                "game_id": game.id,
+                "scoreboard": scoreboard,
+                "winner": winner
+            })
+            
             print(f"[GAME] Game {game.id} finished!")
             return {"status": "game_over", "message": "All rounds completed"}
         
@@ -296,7 +388,8 @@ def next_round(room_id: int, current_user: User = Depends(get_current_user)):
         
         # Create next round
         new_round_number = game.current_round + 1
-        prompt = get_random_prompt([r.prompt for r in session.exec(select(Round).where(Round.game_id == game.id)).all()])
+        used_prompts = [r.prompt for r in session.exec(select(Round).where(Round.game_id == game.id)).all()]
+        prompt = get_random_prompt(used_prompts)
         
         new_round = Round(
             game_id=game.id,
@@ -311,6 +404,32 @@ def next_round(room_id: int, current_user: User = Depends(get_current_user)):
         session.add(game)
         
         session.commit()
+        
+        # Clear canvas for new round
+        clear_canvas_history(room_id)
+        
+        # Build scoreboard
+        scores = session.exec(select(Score).where(Score.game_id == game.id)).all()
+        scoreboard = []
+        for score in scores:
+            user = session.get(User, score.user_id)
+            if user:
+                scoreboard.append({"user_id": user.id, "username": user.username, "points": score.points})
+        scoreboard.sort(key=lambda x: x["points"], reverse=True)
+        
+        drawer = session.get(User, next_drawer_id)
+        
+        # Broadcast new round to all users
+        schedule_broadcast(room_id, "new_round", {
+            "game_id": game.id,
+            "round_number": new_round_number,
+            "total_rounds": game.total_rounds,
+            "drawer_id": next_drawer_id,
+            "drawer_name": drawer.username if drawer else "Unknown",
+            "prompt": prompt,  # Frontend will only show to drawer
+            "scoreboard": scoreboard,
+            "created_by": game.created_by
+        })
         
         print(f"[GAME] Round {new_round_number}: Drawer={next_drawer_id}, Prompt={prompt}")
         

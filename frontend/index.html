@@ -779,7 +779,10 @@
                     method: 'DELETE',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                if (!resp.ok) throw new Error('Failed to delete room');
+                if (!resp.ok) {
+                    const errData = await resp.json().catch(() => ({}));
+                    throw new Error(errData.detail || 'Failed to delete room (status ' + resp.status + ')');
+                }
                 if (currentRoom && currentRoom.id === roomId) {
                     disconnectWebSocket();
                     currentRoom = null;
@@ -1064,6 +1067,14 @@
                     drawRemote(data);
                     break;
 
+                case 'canvas_history':
+                    if (data.drawings && data.drawings.length > 0) {
+                        data.drawings.forEach(d => {
+                            drawLocal(d.x1, d.y1, d.x2, d.y2, d.color, d.size, d.tool);
+                        });
+                    }
+                    break;
+
                 case 'user_joined':
                     usersInRoom = data.users;
                     updateUsersList();
@@ -1074,10 +1085,85 @@
                     updateUsersList();
                     break;
 
+                case 'game_started':
+                    handleGameStarted(data);
+                    break;
+
+                case 'new_round':
+                    handleNewRound(data);
+                    break;
+
+                case 'guess_correct':
+                    handleGuessCorrect(data);
+                    break;
+
+                case 'guess_wrong':
+                    handleGuessWrong(data);
+                    break;
+
+                case 'game_over':
+                    handleGameOver(data);
+                    break;
+
                 case 'error':
                     console.error('Server error:', data.message);
                     break;
             }
+        }
+
+        // ---- WebSocket Game Event Handlers ----
+        function handleGameStarted(data) {
+            currentGame = data;
+            document.getElementById('startGameBtn').classList.add('hidden');
+            document.getElementById('gamePanel').classList.remove('hidden');
+            document.getElementById('roundInfo').classList.remove('hidden');
+            document.getElementById('scoreboard').classList.remove('hidden');
+            document.getElementById('roundResult').classList.add('hidden');
+            document.getElementById('roundText').textContent = 'Round ' + data.current_round + '/' + data.total_rounds;
+            clearCanvas();
+            loadGameStatus();
+        }
+
+        function handleNewRound(data) {
+            currentGame = data;
+            clearCanvas();
+            document.getElementById('roundResult').classList.add('hidden');
+            loadGameStatus();
+        }
+
+        function handleGuessCorrect(data) {
+            document.getElementById('roundResult').classList.remove('hidden');
+            var emoji = String.fromCodePoint(0x1F389);
+            document.getElementById('roundResultText').innerHTML =
+                emoji + ' <strong>' + data.username + '</strong> guessed it! It was "<strong>' + data.prompt + '</strong>"<br>' +
+                '+' + data.guesser_points + ' points for guesser, +' + data.drawer_points + ' for drawer';
+            updateScoreboard(data.scoreboard);
+            document.getElementById('guessArea').classList.add('hidden');
+            clearInterval(gameTimer);
+        }
+
+        function handleGuessWrong(data) {
+            var guessInput = document.getElementById('guessInput');
+            guessInput.style.borderColor = '#ff0000';
+            setTimeout(function() { guessInput.style.borderColor = '#333'; }, 500);
+            guessInput.value = '';
+        }
+
+        function handleGameOver(data) {
+            clearInterval(gameTimer);
+            document.getElementById('roundResult').classList.remove('hidden');
+            var emoji = String.fromCodePoint(0x1F3C6);
+            var winnerText = data.winner ? data.winner.username + ' with ' + data.winner.points + ' points' : 'Nobody';
+            document.getElementById('roundResultText').innerHTML =
+                emoji + ' <strong>Game Over!</strong><br>Winner: <strong>' + winnerText + '</strong>';
+            updateScoreboard(data.scoreboard);
+            document.getElementById('guessArea').classList.add('hidden');
+            document.getElementById('roundInfo').classList.add('hidden');
+            if (currentUser && currentRoom && currentRoom.creatorId === currentUser.id) {
+                document.getElementById('startGameBtn').classList.remove('hidden');
+            }
+        }
+
         }
 
         // ---- Users List ----
