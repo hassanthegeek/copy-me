@@ -1,7 +1,7 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel, EmailStr
-from app.models import Role
+from app.models import Role, GameStatus
 
 
 # ---- Auth Schemas ----
@@ -55,3 +55,52 @@ class RoomMemberResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ---- Game Schemas ----
+class GameCreate(BaseModel):
+    total_rounds: int = 3
+
+
+class GameResponse(BaseModel):
+    id: int
+    room_id: int
+    status: GameStatus
+    current_round: int
+    total_rounds: int
+    created_by: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class RoundResponse(BaseModel):
+    id: int
+    game_id: int
+    drawer_id: int
+    prompt: str
+    winner_id: Optional[int]
+    round_number: int
+    started_at: datetime
+    ended_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+
+
+class ScoreResponse(BaseModel):
+    id: int
+    game_id: int
+    user_id: int
+    points: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ScoreboardResponse(BaseModel):
+    user_id: int
+    username: str
+    points: int

@@ -2,7 +2,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from app.models import User, Room, RoomMember
+from app.models import User, Room, RoomMember, Game, Round, Score
 from app.routers import auth, rooms, websocket
 from app.database import create_db_and_tables
 
