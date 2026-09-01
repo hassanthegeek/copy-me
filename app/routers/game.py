@@ -3,6 +3,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 from app.database import engine
+from app.models import Room
 from app.models import Game, Round, Score, GameStatus, User, RoomMember
 from app.schemas import GameCreate, GameResponse, RoundResponse, ScoreResponse, ScoreboardResponse
 from app.auth import get_current_user
@@ -42,14 +43,11 @@ def start_game(room_id: int, current_user: User = Depends(get_current_user)):
     """Start a new game in a room. Only room creator can start."""
     with Session(engine) as session:
         # Check if user is member of room
-        membership = session.exec(
-            select(RoomMember).where(
-                RoomMember.room_id == room_id,
-                RoomMember.user_id == current_user.id
-            )
-        ).first()
-        if not membership:
-            raise HTTPException(status_code=403, detail="Not a member of this room")
+        room = session.get(Room, room_id)
+        if not room:
+            raise HTTPException(status_code=404, detail="Room not found")
+        if room.creator_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Only the room creator can start the game")
         
         # Check if there's already an active game
         active_game = session.exec(
@@ -330,8 +328,8 @@ def get_scoreboard(room_id: int, current_user: User = Depends(get_current_user))
     with Session(engine) as session:
         # Get any game (active or finished)
         game = session.exec(
-            select(Game).where(Game.room_id == room_id)
-        ).order_by(Game.id.desc()).first()
+            select(Game).where(Game.room_id == room_id).order_by(Game.id.desc())
+        ).first()
         
         if not game:
             raise HTTPException(status_code=404, detail="No game found")
