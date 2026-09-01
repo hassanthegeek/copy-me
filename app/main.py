@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from app.models import User, Room, RoomMember, Game, Round, Score
-from app.routers import auth, rooms, websocket
+from app.routers import auth, rooms, websocket, game
 from app.database import create_db_and_tables
 
 app = FastAPI(
@@ -16,6 +16,7 @@ app = FastAPI(
 app.include_router(auth.router)
 app.include_router(rooms.router)
 app.include_router(websocket.router)
+app.include_router(game.router)
 
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 
