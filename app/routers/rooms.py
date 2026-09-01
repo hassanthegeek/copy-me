@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List
 from sqlmodel import Session, select
 from app.database import engine
-from app.models import Room, RoomMember, User
+from app.models import Room, RoomMember, User, Game, Round, Score
 from app.schemas import RoomCreate, RoomResponse, RoomMemberResponse
 from app.auth import get_current_user
 
@@ -83,7 +83,18 @@ def delete_room(room_id: int, current_user: User = Depends(get_current_user)):
         if room.creator_id != current_user.id:
             raise HTTPException(status_code=403, detail="Only the room creator can delete it")
         
-        # Delete all members first
+        # Delete all scores for games in this room
+        games = session.exec(select(Game).where(Game.room_id == room_id)).all()
+        for game in games:
+            scores = session.exec(select(Score).where(Score.game_id == game.id)).all()
+            for score in scores:
+                session.delete(score)
+            rounds = session.exec(select(Round).where(Round.game_id == game.id)).all()
+            for rnd in rounds:
+                session.delete(rnd)
+            session.delete(game)
+        
+        # Delete all members
         members = session.exec(select(RoomMember).where(RoomMember.room_id == room_id)).all()
         for member in members:
             session.delete(member)
