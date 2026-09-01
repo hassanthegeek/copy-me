@@ -346,6 +346,124 @@
             font-size: 0.75rem;
             margin: 2px;
         }
+
+        /* ---- Game UI ---- */
+        .game-panel {
+            margin-bottom: 15px;
+            padding: 15px;
+            background: #16213e;
+            border-radius: 10px;
+            border: 1px solid #333;
+        }
+        .game-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .round-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            font-size: 1rem;
+            color: #fff;
+        }
+        .timer {
+            background: #e94560;
+            color: #fff;
+            padding: 5px 15px;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 1.2rem;
+            min-width: 50px;
+            text-align: center;
+        }
+        .timer.warning {
+            background: #ff6b35;
+            animation: pulse 1s infinite;
+        }
+        .timer.danger {
+            background: #ff0000;
+            animation: pulse 0.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        .prompt-display {
+            background: #0f3460;
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 1.1rem;
+        }
+        .prompt-word {
+            color: #e94560;
+            font-weight: bold;
+            font-size: 1.3rem;
+            text-transform: uppercase;
+        }
+        .guess-area {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .guess-input {
+            flex: 1;
+            padding: 10px 15px;
+            border: 1px solid #333;
+            border-radius: 5px;
+            background: #1a1a2e;
+            color: #fff;
+            font-size: 1rem;
+        }
+        .guess-input:focus {
+            outline: none;
+            border-color: #e94560;
+        }
+        .scoreboard {
+            background: #1a1a2e;
+            padding: 10px;
+            border-radius: 8px;
+        }
+        .scoreboard h4 {
+            color: #e94560;
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+        }
+        .score-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 10px;
+            background: #0f3460;
+            border-radius: 5px;
+            margin-bottom: 5px;
+            font-size: 0.85rem;
+        }
+        .score-item .name {
+            color: #fff;
+        }
+        .score-item .points {
+            color: #e94560;
+            font-weight: bold;
+        }
+        .game-over {
+            text-align: center;
+            padding: 20px;
+            background: #16213e;
+            border-radius: 10px;
+            border: 2px solid #e94560;
+        }
+        .game-over h2 {
+            color: #e94560;
+            margin-bottom: 10px;
+        }
+        .game-over .winner {
+            font-size: 1.5rem;
+            color: #ffd700;
+            margin: 15px 0;
+        }
     </style>
 </head>
 <body>
@@ -408,6 +526,28 @@
                 <div id="usersTags"></div>
             </div>
 
+            <!-- Game UI -->
+            <div class="game-panel hidden" id="gamePanel">
+                <div class="game-header">
+                    <button class="btn btn-primary" id="startGameBtn" onclick="startGame()">🎮 Start Game</button>
+                    <div class="round-info hidden" id="roundInfo">
+                        <span id="roundText">Round 1/3</span>
+                        <span class="timer" id="timerDisplay">60</span>
+                    </div>
+                </div>
+                <div class="prompt-display hidden" id="promptDisplay">
+                    <span>Draw: </span><span class="prompt-word" id="promptWord"></span>
+                </div>
+                <div class="guess-area hidden" id="guessArea">
+                    <input type="text" id="guessInput" placeholder="Type your guess..." class="guess-input">
+                    <button class="btn btn-primary" onclick="submitGuess()">Guess</button>
+                </div>
+                <div class="scoreboard hidden" id="scoreboard">
+                    <h4>🏆 Scoreboard</h4>
+                    <div id="scoreList"></div>
+                </div>
+            </div>
+
             <div id="wsStatus" class="ws-status hidden">Connecting...</div>
 
             <div class="toolbar hidden" id="toolbar">
@@ -436,6 +576,10 @@
         let currentRoom = null;
         let ws = null;
         let usersInRoom = [];
+        let currentGame = null;
+        let isDrawer = false;
+        let gameTimer = null;
+        let timeLeft = 60;
 
         // ---- Canvas State ----
         const canvas = document.getElementById('drawCanvas');
@@ -600,6 +744,8 @@
             document.getElementById('drawCanvas').classList.remove('hidden');
             document.getElementById('wsStatus').classList.remove('hidden');
             document.getElementById('usersList').classList.remove('hidden');
+            document.getElementById('gamePanel').classList.remove('hidden');
+            loadGameStatus();
             document.getElementById('roomList').querySelectorAll('.room-item').forEach(el => el.classList.remove('active'));
             loadRooms();
             clearCanvas();
@@ -647,6 +793,144 @@
             };
         }
 
+        // ---- Game Functions ----
+        async function startGame() {
+            if (!currentRoom) return;
+            try {
+                const resp = await fetch(`${API}/rooms/${currentRoom.id}/game/start`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.detail);
+                
+                // Show game UI
+                document.getElementById('startGameBtn').classList.add('hidden');
+                document.getElementById('roundInfo').classList.remove('hidden');
+                document.getElementById('scoreboard').classList.remove('hidden');
+                
+                // Load game status
+                loadGameStatus();
+            } catch (e) {
+                alert(e.message);
+            }
+        }
+
+        async function loadGameStatus() {
+            if (!currentRoom) return;
+            try {
+                const resp = await fetch(`${API}/rooms/${currentRoom.id}/game/status`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.detail);
+                
+                if (data.status === 'no_active_game') {
+                    document.getElementById('startGameBtn').classList.remove('hidden');
+                    document.getElementById('roundInfo').classList.add('hidden');
+                    document.getElementById('promptDisplay').classList.add('hidden');
+                    document.getElementById('guessArea').classList.add('hidden');
+                    return;
+                }
+                
+                currentGame = data;
+                isDrawer = data.is_drawer;
+                
+                // Update round info
+                document.getElementById('roundText').textContent = `Round ${data.current_round}/${data.total_rounds}`;
+                
+                // Show prompt only for drawer
+                if (isDrawer && data.round.prompt) {
+                    document.getElementById('promptDisplay').classList.remove('hidden');
+                    document.getElementById('promptWord').textContent = data.round.prompt;
+                } else {
+                    document.getElementById('promptDisplay').classList.add('hidden');
+                }
+                
+                // Show guess area for non-drawers
+                if (!isDrawer) {
+                    document.getElementById('guessArea').classList.remove('hidden');
+                } else {
+                    document.getElementById('guessArea').classList.add('hidden');
+                }
+                
+                // Update scoreboard
+                updateScoreboard(data.scoreboard);
+                
+                // Start timer
+                startTimer();
+            } catch (e) {
+                console.error('Failed to load game status:', e);
+            }
+        }
+
+        function updateScoreboard(scoreboard) {
+            const scoreList = document.getElementById('scoreList');
+            scoreList.innerHTML = scoreboard.map((s, i) => `
+                <div class="score-item">
+                    <span class="name">${i === 0 ? '👑 ' : ''}${s.username}</span>
+                    <span class="points">${s.points} pts</span>
+                </div>
+            `).join('');
+        }
+
+        function startTimer() {
+            clearInterval(gameTimer);
+            timeLeft = 60;
+            const timerEl = document.getElementById('timerDisplay');
+            
+            gameTimer = setInterval(() => {
+                timeLeft--;
+                timerEl.textContent = timeLeft;
+                
+                // Update timer color
+                timerEl.className = 'timer';
+                if (timeLeft <= 10) {
+                    timerEl.classList.add('danger');
+                } else if (timeLeft <= 30) {
+                    timerEl.classList.add('warning');
+                }
+                
+                if (timeLeft <= 0) {
+                    clearInterval(gameTimer);
+                    timerEl.textContent = '0';
+                    // Round ended - show result
+                    if (currentGame && !currentGame.round.prompt) {
+                        alert('Time\'s up! No one guessed correctly.');
+                    }
+                }
+            }, 1000);
+        }
+
+        async function submitGuess() {
+            const guessInput = document.getElementById('guessInput');
+            const guess = guessInput.value.trim();
+            if (!guess || !currentRoom) return;
+            
+            try {
+                const resp = await fetch(`${API}/rooms/${currentRoom.id}/game/guess?guess=${encodeURIComponent(guess)}`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.detail);
+                
+                if (data.correct) {
+                    alert(`🎉 Correct! It was "${data.prompt}"!\n+${data.guesser_points} points for you, +${data.drawer_points} for drawer`);
+                    guessInput.value = '';
+                    document.getElementById('guessArea').classList.add('hidden');
+                    loadGameStatus();
+                } else {
+                    // Wrong guess - shake input
+                    guessInput.style.borderColor = '#ff0000';
+                    setTimeout(() => { guessInput.style.borderColor = '#333'; }, 500);
+                    guessInput.value = '';
+                }
+            } catch (e) {
+                alert(e.message);
+            }
+        }
+
         function disconnectWebSocket() {
             if (ws) {
                 ws.close();
@@ -654,6 +938,8 @@
             }
             document.getElementById('wsStatus').classList.add('hidden');
             document.getElementById('usersList').classList.add('hidden');
+            document.getElementById('gamePanel').classList.add('hidden');
+            clearInterval(gameTimer);
         }
 
         function sendWS(data) {
@@ -787,6 +1073,9 @@
         });
         document.getElementById('roomNameInput').addEventListener('keydown', (e) => {
             if (e.key === 'Enter') createRoom();
+        });
+        document.getElementById('guessInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') submitGuess();
         });
     </script>
 </body>
