@@ -7,7 +7,6 @@ from app.models import Room
 from app.models import Game, Round, Score, GameStatus, User, RoomMember
 from app.schemas import GameCreate, GameResponse, RoundResponse, ScoreResponse, ScoreboardResponse
 from app.auth import get_current_user
-from app.routers.websocket import room_connections
 from app.words import get_random_prompt
 
 router = APIRouter(prefix="/rooms", tags=["Game"])
@@ -78,10 +77,10 @@ def start_game(room_id: int, current_user: User = Depends(get_current_user)):
         if active_game:
             raise HTTPException(status_code=400, detail="Game already in progress")
         
-        # Check how many users are actually connected via WebSocket
-        connected = room_connections.get(room_id, {})
-        if len(connected) < 2:
-            raise HTTPException(status_code=400, detail="Need at least 2 players connected to start (both users must be in the room)")
+        # Get all members
+        member_ids = get_room_members(room_id, session)
+        if len(member_ids) < 2:
+            raise HTTPException(status_code=400, detail="Need at least 2 players to start")
         
         # Create new game
         game = Game(
