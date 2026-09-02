@@ -5,7 +5,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from app.models import User, Room, RoomMember, Game, Round, Score
 from app.routers import auth, rooms, websocket, game
-from app.database import create_db_and_tables
+from app.database import create_db_and_tables, engine
 
 app = FastAPI(
     title="Burhan's Drawing App",
@@ -33,7 +33,19 @@ FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 
 @app.on_event("startup")
 def on_startup():
+    from sqlmodel import Session, select
+    from app.models import Game, GameStatus
+    
     create_db_and_tables()
+    
+    # Clean up any stuck active games from previous sessions
+    with Session(engine) as session:
+        active_games = session.exec(select(Game).where(Game.status == GameStatus.ACTIVE)).all()
+        for game in active_games:
+            game.status = GameStatus.FINISHED
+        session.commit()
+        if active_games:
+            print(f"Cleaned up {len(active_games)} stuck game(s) from previous session")
 
 
 @app.get("/")
