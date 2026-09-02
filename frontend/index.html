@@ -602,8 +602,8 @@
 
     <script>
         // ---- State ----
-        const API = 'http://127.0.0.1:8000';
-        const WS_BASE = 'ws://127.0.0.1:8000';
+        const API = `http://${window.location.hostname}:8000`;
+        const WS_BASE = `ws://${window.location.hostname}:8000`;
         let token = localStorage.getItem('token');
         let currentUser = null;
         let currentRoom = null;

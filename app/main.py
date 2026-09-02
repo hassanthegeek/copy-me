@@ -1,5 +1,6 @@
 from pathlib import Path
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from app.models import User, Room, RoomMember, Game, Round, Score
@@ -10,6 +11,15 @@ app = FastAPI(
     title="Burhan's Drawing App",
     description="Real-time collaborative drawing app",
     version="1.0.0"
+)
+
+# CORS - allow all origins for LAN access
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Include routers
