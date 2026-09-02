@@ -160,6 +160,14 @@ def get_game_status(room_id: int, current_user: User = Depends(get_current_user)
         if not game:
             return {"status": "no_active_game"}
         
+        # Auto-finish games stuck for more than 10 minutes
+        from datetime import datetime, timedelta
+        if game.created_at and (datetime.utcnow() - game.created_at) > timedelta(minutes=10):
+            game.status = GameStatus.FINISHED
+            session.add(game)
+            session.commit()
+            return {"status": "no_active_game"}
+        
         # Get current round
         current_round = session.exec(
             select(Round).where(
