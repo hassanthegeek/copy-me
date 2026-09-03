@@ -1090,6 +1090,8 @@
                 
                 // Only start timer if round is still in progress (no winner yet)
                 if (!data.round.winner_id) {
+                    const gi = document.getElementById("guessInput");
+                    if (gi) gi.disabled = false;
                     startTimer();
                 }
             } catch (e) {
@@ -1126,6 +1128,9 @@
                 
                 if (timeLeft <= 0) {
                     clearInterval(gameTimer);
+                    // Disable guess input when time is up
+                    const gi = document.getElementById("guessInput");
+                    if (gi) gi.disabled = true;
                     timerEl.textContent = '0';
                     // Round ended - show result
                     if (currentGame && !currentGame.round.prompt) {

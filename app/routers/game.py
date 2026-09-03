@@ -257,6 +257,11 @@ def submit_guess(room_id: int, guess: str, current_user: User = Depends(get_curr
         if current_round.winner_id:
             raise HTTPException(status_code=400, detail="Round already finished")
         
+        # Check if timer has expired (60 seconds per round)
+        time_elapsed = (datetime.utcnow() - current_round.started_at).total_seconds()
+        if time_elapsed > 60:
+            raise HTTPException(status_code=400, detail="Time is up! Round has ended.")
+        
         # Check if guess is correct (case-insensitive)
         is_correct = guess.strip().lower() == current_round.prompt.lower()
         
