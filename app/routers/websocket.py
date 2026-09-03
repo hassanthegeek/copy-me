@@ -22,6 +22,9 @@ canvas_history: Dict[int, List[dict]] = {}
 # Pending game events queue: room_id -> list of message dicts
 pending_events: Dict[int, List[dict]] = {}
 
+# Canvas lock during game: room_id -> user_id (only this user can draw)
+canvas_locked_by: Dict[int, Optional[int]] = {}
+
 
 def verify_token_from_query(token: str) -> Optional[int]:
     """Verify JWT token from query parameter and return user_id."""
@@ -154,6 +157,13 @@ async def websocket_endpoint(websocket: WebSocket, room_id: int, token: str = Qu
             msg_type = data.get("type")
 
             if msg_type == "draw":
+                # Check canvas lock - only the locked user can draw during game
+                locked_by = canvas_locked_by.get(room_id)
+                if locked_by is not None and locked_by != user_id:
+                    # Not the drawer - reject draw event silently
+                    await flush_events(room_id)
+                    continue
+
                 # Store in canvas history
                 if room_id not in canvas_history:
                     canvas_history[room_id] = []
@@ -198,6 +208,14 @@ async def websocket_endpoint(websocket: WebSocket, room_id: int, token: str = Qu
         # ---- Cleanup ----
         connections = room_connections.get(room_id, {})
         connections.pop(user_id, None)
+
+        # If this user was drawing, unlock canvas
+        if canvas_locked_by.get(room_id) == user_id:
+            canvas_locked_by.pop(room_id, None)
+            await broadcast_to_room(room_id, {
+                "type": "canvas_unlocked",
+                "message": f"{username} disconnected - canvas unlocked"
+            })
 
         await broadcast_to_room(room_id, {
             "type": "user_left",

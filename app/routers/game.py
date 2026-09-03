@@ -8,6 +8,7 @@ from app.models import Game, Round, Score, GameStatus, User, RoomMember
 from app.schemas import GameCreate, GameResponse, RoundResponse, ScoreResponse, ScoreboardResponse
 from app.auth import get_current_user
 from app.words import get_random_prompt
+from app.routers.websocket import canvas_locked_by
 
 router = APIRouter(prefix="/rooms", tags=["Game"])
 
@@ -119,6 +120,9 @@ def start_game(room_id: int, current_user: User = Depends(get_current_user)):
         
         # Clear canvas for new game
         clear_canvas_history(room_id)
+
+        # Lock canvas to the first drawer
+        canvas_locked_by[room_id] = first_drawer_id
         
         # Build scoreboard
         scores = session.exec(select(Score).where(Score.game_id == game.id)).all()
@@ -262,27 +266,21 @@ def submit_guess(room_id: int, guess: str, current_user: User = Depends(get_curr
             current_round.ended_at = datetime.utcnow()
             session.add(current_round)
             
-            # Calculate points based on time
-            time_elapsed = (datetime.utcnow() - current_round.started_at).total_seconds()
-            
-            if time_elapsed <= 10:
-                guesser_points = 15  # Fast guess
-            elif time_elapsed <= 30:
-                guesser_points = 10  # Medium guess
-            else:
-                guesser_points = 5   # Slow guess
+            # Fixed points: guesser +5, drawer +6
+            guesser_points = 5
+            drawer_points = 6
             
             # Award points
             guesser_score = get_or_create_score(game.id, current_user.id, session)
             guesser_score.points += guesser_points
             
             drawer_score = get_or_create_score(game.id, current_round.drawer_id, session)
-            drawer_score.points += 5  # Drawer gets 5 points for correct guess
+            drawer_score.points += drawer_points
             
             session.commit()
             
             print(f"[GAME] {current_user.username} guessed '{current_round.prompt}' correctly!")
-            print(f"[GAME] +{guesser_points} points to guesser, +5 to drawer")
+            print(f"[GAME] +{guesser_points} points to guesser, +{drawer_points} to drawer")
             
             # Build updated scoreboard
             scores = session.exec(select(Score).where(Score.game_id == game.id)).all()
@@ -299,8 +297,7 @@ def submit_guess(room_id: int, guess: str, current_user: User = Depends(get_curr
                 "username": current_user.username,
                 "prompt": current_round.prompt,
                 "guesser_points": guesser_points,
-                "drawer_points": 5,
-                "time_elapsed": round(time_elapsed, 1),
+                "drawer_points": drawer_points,
                 "scoreboard": scoreboard,
                 "round_number": current_round.round_number
             })
@@ -309,8 +306,7 @@ def submit_guess(room_id: int, guess: str, current_user: User = Depends(get_curr
                 "correct": True,
                 "prompt": current_round.prompt,
                 "guesser_points": guesser_points,
-                "drawer_points": 5,
-                "time_elapsed": round(time_elapsed, 1),
+                "drawer_points": drawer_points,
                 "winner": current_user.username
             }
         else:
@@ -373,6 +369,9 @@ def next_round(room_id: int, current_user: User = Depends(get_current_user)):
             scoreboard.sort(key=lambda x: x["points"], reverse=True)
             winner = scoreboard[0] if scoreboard else None
             
+            # Unlock canvas when game ends
+            canvas_locked_by.pop(room_id, None)
+
             # Broadcast game over
             schedule_broadcast(room_id, "game_over", {
                 "game_id": game.id,
@@ -412,6 +411,9 @@ def next_round(room_id: int, current_user: User = Depends(get_current_user)):
         
         # Clear canvas for new round
         clear_canvas_history(room_id)
+
+        # Lock canvas to new drawer
+        canvas_locked_by[room_id] = next_drawer_id
         
         # Build scoreboard
         scores = session.exec(select(Score).where(Score.game_id == game.id)).all()

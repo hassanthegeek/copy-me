@@ -671,7 +671,12 @@
                 <button class="btn btn-danger" onclick="clearCanvas()">Clear</button>
             </div>
 
-            <canvas id="drawCanvas" class="hidden" width="900" height="550"></canvas>
+            <div style="position:relative;display:inline-block;">
+                <canvas id="drawCanvas" class="hidden" width="900" height="550"></canvas>
+                <div id="canvasOverlay" class="hidden" style="position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;border-radius:8px;pointer-events:none;z-index:10;">
+                    <span id="canvasOverlayText" style="color:#fff;font-size:18px;font-weight:bold;text-shadow:1px 1px 3px rgba(0,0,0,0.8);padding:10px 20px;background:rgba(0,0,0,0.5);border-radius:8px;"></span>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1034,6 +1039,8 @@
                     document.getElementById('scoreList').innerHTML = '';
                     currentGame = null;
                     isDrawer = false;
+                    canvas.style.cursor = 'crosshair';
+                    document.getElementById('canvasOverlay').classList.add('hidden');
                     return;
                 }
                 
@@ -1050,6 +1057,18 @@
                 
                 // Update round info
                 document.getElementById('roundText').textContent = `Round ${data.current_round}/${data.total_rounds}`;
+                
+                // Update canvas cursor and overlay based on role
+                var overlay = document.getElementById('canvasOverlay');
+                var overlayText = document.getElementById('canvasOverlayText');
+                if (isDrawer) {
+                    canvas.style.cursor = 'crosshair';
+                    overlay.classList.add('hidden');
+                } else {
+                    canvas.style.cursor = 'not-allowed';
+                    overlayText.textContent = 'Only ' + (data.round.drawer_name || 'the drawer') + ' can draw - your job is to guess!';
+                    overlay.classList.remove('hidden');
+                }
                 
                 // Show prompt only for drawer
                 if (isDrawer && data.round.prompt) {
@@ -1291,6 +1310,8 @@
             updateScoreboard(data.scoreboard);
             document.getElementById('guessArea').classList.add('hidden');
             document.getElementById('roundInfo').classList.add('hidden');
+            isDrawer = false;
+            canvas.style.cursor = 'crosshair';
             if (currentUser && currentRoom && currentRoom.creatorId === currentUser.id) {
                 document.getElementById('startGameBtn').classList.remove('hidden');
             }
@@ -1356,6 +1377,8 @@
         // ---- Canvas Events ----
         canvas.addEventListener('mousedown', (e) => {
             if (!currentRoom) return;
+            // During game: only drawer can draw
+            if (currentGame && !isDrawer) return;
             isDrawing = true;
             [lastX, lastY] = [e.offsetX, e.offsetY];
         });
