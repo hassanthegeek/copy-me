@@ -40,6 +40,8 @@ class Room(SQLModel, table=True):
     id: Optional[int] = Field(primary_key=True)
     name: str
     creator_id: int = Field(foreign_key="users.id")
+    is_private: bool = Field(default=False)
+    max_members: int = Field(default=10)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     # Relationships

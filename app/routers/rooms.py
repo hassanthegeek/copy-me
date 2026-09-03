@@ -12,7 +12,7 @@ router = APIRouter(prefix="/rooms", tags=["Rooms"])
 @router.post("/", response_model=RoomResponse, status_code=status.HTTP_201_CREATED)
 def create_room(room: RoomCreate, current_user: User = Depends(get_current_user)):
     with Session(engine) as session:
-        new_room = Room(name=room.name, creator_id=current_user.id)
+        new_room = Room(name=room.name, creator_id=current_user.id, is_private=room.is_private, max_members=room.max_members)
         session.add(new_room)
         session.commit()
         session.refresh(new_room)
@@ -27,14 +27,19 @@ def create_room(room: RoomCreate, current_user: User = Depends(get_current_user)
         session.add(membership)
         session.commit()
 
-        return {"id": room_id, "name": room_name, "creator_id": creator_id, "created_at": room_created_at}
+        return {"id": room_id, "name": room_name, "creator_id": creator_id, "is_private": new_room.is_private, "max_members": new_room.max_members, "created_at": room_created_at}
 
 
 @router.get("/", response_model=List[RoomResponse])
 def list_rooms(current_user: User = Depends(get_current_user)):
     with Session(engine) as session:
-        rooms = session.exec(select(Room)).all()
-        return [{"id": r.id, "name": r.name, "creator_id": r.creator_id, "created_at": r.created_at} for r in rooms]
+        all_rooms = session.exec(select(Room)).all()
+        # Get rooms user is a member of
+        member_rooms = session.exec(select(RoomMember).where(RoomMember.user_id == current_user.id)).all()
+        member_room_ids = {m.room_id for m in member_rooms}
+        # Filter: show public + private rooms user owns or is member of
+        visible = [r for r in all_rooms if not r.is_private or r.creator_id == current_user.id or r.id in member_room_ids]
+        return [{"id": r.id, "name": r.name, "creator_id": r.creator_id, "is_private": r.is_private, "max_members": r.max_members, "created_at": r.created_at} for r in visible]
 
 
 @router.post("/{room_id}/join", response_model=RoomMemberResponse)
@@ -53,7 +58,12 @@ def join_room(room_id: int, current_user: User = Depends(get_current_user)):
             )
         ).first()
         if existing:
-            raise HTTPException(status_code=400, detail="Already a member of this room")
+            raise HTTPException(status_code=200, detail="Already a member of this room")
+        
+        # Check max members
+        member_count = len(session.exec(select(RoomMember).where(RoomMember.room_id == room_id)).all())
+        if member_count >= room.max_members:
+            raise HTTPException(status_code=400, detail=f"Room is full (max {room.max_members} members)")
 
         membership = RoomMember(room_id=room_id, user_id=current_user.id)
         session.add(membership)

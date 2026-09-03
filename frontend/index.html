@@ -246,6 +246,71 @@
             display: block;
         }
 
+        .room-settings {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding: 8px;
+            background: #1a1a2e;
+            border-radius: 5px;
+        }
+
+        .room-setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: #ccc;
+            font-size: 0.8rem;
+            cursor: pointer;
+        }
+
+        .room-setting-row input[type="checkbox"] {
+            width: auto;
+        }
+
+        .room-badge {
+            display: inline-block;
+            font-size: 0.65rem;
+            padding: 1px 5px;
+            border-radius: 3px;
+            margin-left: 5px;
+            vertical-align: middle;
+        }
+
+        .room-badge.private {
+            background: #e94560;
+            color: #fff;
+        }
+
+        .room-badge.public {
+            background: #0f3460;
+            color: #aaa;
+        }
+
+        .room-max {
+            font-size: 0.7rem;
+            color: #777;
+        }
+
+        .btn-share {
+            position: absolute;
+            top: 5px;
+            right: 28px;
+            background: #0f3460;
+            color: #aaa;
+            border: none;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            font-size: 0.65rem;
+            cursor: pointer;
+            display: none;
+        }
+
+        .room-item:hover .btn-share {
+            display: block;
+        }
+
         /* ---- Canvas Area ---- */
         .canvas-area {
             flex: 1;
@@ -537,6 +602,16 @@
         <div class="sidebar">
             <h3>Rooms</h3>
             <input type="text" id="roomNameInput" placeholder="New room name..." class="hidden">
+            <div class="room-settings hidden" id="roomSettings">
+                <label class="room-setting-row">
+                    <span>Private</span>
+                    <input type="checkbox" id="roomPrivate">
+                </label>
+                <label class="room-setting-row">
+                    <span>Max users</span>
+                    <input type="number" id="roomMaxMembers" value="10" min="2" max="50" style="width:60px;padding:4px;border-radius:4px;border:1px solid #333;background:#1a1a2e;color:#fff;">
+                </label>
+            </div>
             <button class="btn btn-primary hidden" id="createRoomBtn" onclick="createRoom()">+ Create Room</button>
             <div class="room-list" id="roomList">
                 <p style="color:#555; font-size:0.85rem;">Login to see rooms</p>
@@ -626,9 +701,15 @@
 
         // ---- Init ----
         if (token) {
-            fetchCurrentUser().then(() => {
-                loadRooms();
+            fetchCurrentUser().then(async () => {
+                await loadRooms();
                 showLoggedInUI();
+                // Auto-join room from URL: ?room=ID
+                const urlParams = new URLSearchParams(window.location.search);
+                const roomId = urlParams.get('room');
+                if (roomId) {
+                    setTimeout(() => autoJoinRoom(parseInt(roomId)), 500);
+                }
             });
         }
 
@@ -725,6 +806,7 @@
             `;
             document.getElementById('roomNameInput').classList.remove('hidden');
             document.getElementById('createRoomBtn').classList.remove('hidden');
+            document.getElementById('roomSettings').classList.remove('hidden');
         }
 
         // ---- Rooms ----
@@ -741,8 +823,9 @@
                 }
                 roomList.innerHTML = rooms.map(room => `
                     <div class="room-item ${currentRoom?.id === room.id ? 'active' : ''}" onclick="selectRoom(${room.id}, '${room.name}', ${room.creator_id})">
-                        <div class="room-name">${room.name}</div>
-                        <div class="room-creator">by User #${room.creator_id}</div>
+                        <div class="room-name">${room.name} <span class="room-badge ${room.is_private ? 'private' : 'public'}">${room.is_private ? 'Private' : 'Public'}</span></div>
+                        <div class="room-creator">by User #${room.creator_id} <span class="room-max">• max ${room.max_members || 10}</span></div>
+                        ${currentUser && room.creator_id === currentUser.id ? `<button class="btn-share" onclick="event.stopPropagation(); shareRoom(${room.id})">Share</button>` : ''}
                         ${currentUser && room.creator_id === currentUser.id ? `<button class="btn-delete" onclick="event.stopPropagation(); deleteRoom(${room.id})">✕</button>` : ''}
                     </div>
                 `).join('');
@@ -754,6 +837,8 @@
         async function createRoom() {
             const name = document.getElementById('roomNameInput').value.trim();
             if (!name) return alert('Enter a room name');
+            const is_private = document.getElementById('roomPrivate').checked;
+            const max_members = parseInt(document.getElementById('roomMaxMembers').value) || 10;
 
             try {
                 const resp = await fetch(`${API}/rooms/`, {
@@ -762,14 +847,25 @@
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${token}`
                     },
-                    body: JSON.stringify({ name })
+                    body: JSON.stringify({ name, is_private, max_members })
                 });
                 if (!resp.ok) throw new Error('Failed to create room');
                 document.getElementById('roomNameInput').value = '';
+                document.getElementById('roomPrivate').checked = false;
+                document.getElementById('roomMaxMembers').value = '10';
                 loadRooms();
             } catch (e) {
                 alert(e.message);
             }
+        }
+
+        function shareRoom(roomId) {
+            const url = window.location.origin + '/?room=' + roomId;
+            navigator.clipboard.writeText(url).then(() => {
+                alert('Room link copied! Share it with your friends.');
+            }).catch(() => {
+                prompt('Copy this link:', url);
+            });
         }
 
         async function deleteRoom(roomId) {
@@ -794,6 +890,30 @@
                 loadRooms();
             } catch (e) {
                 alert(e.message);
+            }
+        }
+
+        // ---- Auto-Join from URL ----
+        async function autoJoinRoom(roomId) {
+            try {
+                // Try to join the room first (works even for private rooms via link)
+                const joinResp = await fetch(`${API}/rooms/${roomId}/join`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                // Whether already member or just joined, fetch room details
+                const roomsResp = await fetch(`${API}/rooms/`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const rooms = await roomsResp.json();
+                const room = rooms.find(r => r.id === roomId);
+                if (room) {
+                    selectRoom(room.id, room.name, room.creator_id);
+                } else {
+                    alert('Room not found. It may be private or you lack access.');
+                }
+            } catch (e) {
+                console.error('Auto-join failed:', e);
             }
         }
 

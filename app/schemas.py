@@ -35,12 +35,16 @@ class Token(BaseModel):
 # ---- Room Schemas ----
 class RoomCreate(BaseModel):
     name: str
+    is_private: bool = False
+    max_members: int = 10
 
 
 class RoomResponse(BaseModel):
     id: int
     name: str
     creator_id: int
+    is_private: bool = False
+    max_members: int = 10
     created_at: datetime
 
     class Config:
